@@ -1,0 +1,56 @@
+{
+  "api_host": "0.0.0.0",
+  "api_port": 8000,
+  "debug": false,
+  "log_level": "INFO",
+  "enable_config_hot_reload": true,
+  "config_validation_strict": true,
+  
+  "llm_provider": "openai",
+  "openai_api_key": "sk-your-openai-api-key-here",
+  "openai_model": "gpt-4",
+  "openai_base_url": null,
+  
+  "azure_openai_endpoint": null,
+  "azure_openai_api_key": null,
+  "azure_openai_api_version": "2023-12-01-preview",
+  "azure_openai_deployment_name": null,
+  
+  "embedding_provider": "openai",
+  "embedding_model": "text-embedding-ada-002",
+  "sentence_transformer_model": "all-MiniLM-L6-v2",
+  
+  "storage_base_path": "./storage",
+  "repos_storage_path": "./storage/repos",
+  "docs_storage_path": "./storage/docs",
+  "embeddings_storage_path": "./storage/embeddings",
+  "database_path": "./storage/threat_modeling.db",
+  
+  "enable_storage_quotas": true,
+  "auto_cleanup_enabled": true,
+  "backup_retention_days": 180,
+  "temp_file_retention_hours": 24,
+  "maintenance_interval_hours": 24,
+  
+  "max_repo_size_mb": 100,
+  "analysis_timeout_minutes": 10,
+  "max_concurrent_analyses": 5,
+  
+  "faiss_index_type": "IndexFlatIP",
+  "embedding_dimension": 1536,
+  "use_gpu_for_faiss": false,
+  "faiss_gpu_device": 0,
+  
+  "enable_gpu_acceleration": true,
+  "llm_requests_per_minute": 60,
+  "max_tokens_per_request": 4000,
+  
+  "allowed_repo_hosts": ["github.com", "gitlab.com", "bitbucket.org"],
+  "enable_local_repos": true,
+  "api_key_header": "X-API-Key",
+  "cors_origins": ["*"],
+  
+  "enable_metrics": true,
+  "metrics_retention_days": 30,
+  "health_check_interval_seconds": 60
+}

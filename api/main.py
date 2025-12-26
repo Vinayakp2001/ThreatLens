@@ -1,5 +1,6 @@
 """
 FastAPI main application for Threat Modeling Documentation Generator
+Enhanced with intelligent CPU/GPU resource management.
 """
 import logging
 import time
@@ -29,6 +30,7 @@ from api.repo_ingest import (
     AccessDeniedError, RepositoryTooLargeError, RepositoryTimeoutError,
     UnsupportedRepositoryError, NetworkError
 )
+from api.resource_manager import initialize_resource_manager, get_resource_manager
 from api.security_model import SecurityModelBuilder
 from api.threat_docs import ThreatDocGenerator
 from api.rag import RAGSystem
@@ -125,6 +127,13 @@ async def lifespan(app: FastAPI):
     
     # Initialize components
     try:
+        # Initialize resource manager first
+        resource_manager = initialize_resource_manager()
+        logger.info(f"Resource Manager initialized: {resource_manager.processing_mode.value}")
+        logger.info(f"System capabilities: CPU cores={resource_manager.capabilities.cpu_cores}, "
+                   f"RAM={resource_manager.capabilities.total_ram_gb:.1f}GB, "
+                   f"GPU={resource_manager.capabilities.has_gpu}")
+        
         db_manager = DatabaseManager(settings.database_path)
         db_manager.initialize_database()
         
@@ -511,6 +520,60 @@ async def health_check(db: DatabaseManager = Depends(get_db_manager)) -> HealthR
         llm_config_valid=llm_config_valid,
         storage_paths_exist=storage_paths_exist
     )
+
+
+@app.get("/resources", tags=["Health"])
+async def get_resource_status() -> Dict[str, Any]:
+    """
+    Get current system resource usage and configuration
+    
+    Returns information about:
+    - CPU and memory usage
+    - GPU availability and usage
+    - Resource allocation strategy
+    - Processing mode configuration
+    """
+    try:
+        resource_manager = get_resource_manager()
+        
+        # Get current resource usage
+        usage = resource_manager.monitor_resource_usage()
+        
+        # Get configuration details
+        embedding_config = resource_manager.get_embedding_config()
+        faiss_config = resource_manager.get_faiss_config()
+        concurrency_config = resource_manager.get_concurrency_config()
+        
+        return {
+            "status": "healthy",
+            "processing_mode": resource_manager.processing_mode.value,
+            "system_capabilities": {
+                "cpu_cores": resource_manager.capabilities.cpu_cores,
+                "total_ram_gb": resource_manager.capabilities.total_ram_gb,
+                "available_ram_gb": resource_manager.capabilities.available_ram_gb,
+                "has_gpu": resource_manager.capabilities.has_gpu,
+                "gpu_memory_gb": resource_manager.capabilities.gpu_memory_gb,
+                "gpu_name": resource_manager.capabilities.gpu_name,
+                "storage_type": resource_manager.capabilities.storage_type
+            },
+            "current_usage": usage,
+            "resource_allocation": {
+                "embedding_batch_size": resource_manager.allocation.embedding_batch_size,
+                "vector_search_device": resource_manager.allocation.vector_search_device,
+                "max_concurrent_operations": resource_manager.allocation.max_concurrent_operations,
+                "use_gpu_for_embeddings": resource_manager.allocation.use_gpu_for_embeddings,
+                "faiss_index_type": resource_manager.allocation.faiss_index_type
+            },
+            "configurations": {
+                "embedding": embedding_config,
+                "faiss": faiss_config,
+                "concurrency": concurrency_config
+            }
+        }
+    except Exception as e:
+        logger.error(f"Failed to get resource status: {e}")
+        raise HTTPException(status_code=500, detail=f"Resource monitoring failed: {str(e)}")
+
 
 # Repository Analysis Endpoints
 

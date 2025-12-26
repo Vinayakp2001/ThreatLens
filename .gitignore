@@ -139,6 +139,7 @@ cython_debug/
 
 # Application specific
 storage/
+data/
 *.db
 *.sqlite
 *.sqlite3

@@ -1,34 +1,38 @@
 # Core FastAPI and web framework dependencies
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.5.0
-pydantic-settings==2.1.0
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+pydantic==2.9.2
+pydantic-settings==2.6.1
 
 # HTTP client for LLM APIs
-httpx==0.25.2
+httpx==0.27.2
 
-# Database
-sqlite3  # Built into Python
+# Machine Learning and Embeddings - Hybrid CPU/GPU Strategy
+sentence-transformers==3.0.1
+faiss-cpu==1.13.2  # Primary CPU version for reliability
+# faiss-gpu==1.13.2  # Optional GPU version (install separately if needed)
+numpy>=1.26.4
 
-# Machine Learning and Embeddings
-sentence-transformers==2.2.2
-faiss-cpu==1.7.4
-# faiss-gpu==1.7.4  # Uncomment for GPU support
-numpy==1.24.3
+# Lightweight models for GPU acceleration
+# torch  # Will use existing installation
+# accelerate==0.25.0  # For model optimization
 
 # LLM Integration
-openai==1.3.7
-anthropic==0.7.8
-tenacity==8.2.3
+openai==1.54.3
+anthropic==0.39.0
+google-generativeai==0.8.3
+tenacity==9.0.0
 
 # File and Configuration Management
 watchdog==3.0.0
 python-multipart==0.0.6
 
+# System monitoring
+psutil==5.9.6
+
 # Utilities
 python-dotenv==1.0.0
-pathlib  # Built into Python
-typing-extensions==4.8.0
+typing-extensions>=4.11.0
 
 # Optional: GPU acceleration
 # torch==2.1.1  # Uncomment for GPU support

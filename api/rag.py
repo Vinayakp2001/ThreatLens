@@ -1,5 +1,6 @@
 """
 RAG (Retrieval Augmented Generation) system for enhanced context retrieval
+Enhanced with intelligent CPU/GPU resource management.
 """
 import os
 import re
@@ -20,6 +21,7 @@ from .models import (
     ThreatDoc, CodeReference, SearchResult, Embedding,
     ThreatDocType, RepoContext
 )
+from .resource_manager import get_resource_manager, ResourceManager
 
 logger = logging.getLogger(__name__)
 
@@ -370,28 +372,43 @@ class CodeSnippetExtractor:
 
 
 class EmbeddingGenerator:
-    """Generates embeddings for documents and code snippets"""
+    """Generates embeddings for documents and code snippets with intelligent resource management"""
     
     def __init__(self):
         self.provider = settings.embedding_provider
         self.model_name = settings.embedding_model
         self.sentence_transformer = None
         self.openai_client = None
+        self.resource_manager = get_resource_manager()
         
         self._initialize_embedding_model()
     
     def _initialize_embedding_model(self):
-        """Initialize the embedding model based on provider"""
+        """Initialize the embedding model based on provider and resource capabilities"""
         if self.provider == "sentence-transformers":
             try:
+                # Get optimal device configuration from resource manager
+                embedding_config = self.resource_manager.get_embedding_config()
+                device = embedding_config['device']
+                
                 self.sentence_transformer = SentenceTransformer(
                     settings.sentence_transformer_model,
-                    device=settings.get_device()
+                    device=device
                 )
-                logger.info(f"Initialized SentenceTransformer: {settings.sentence_transformer_model}")
+                logger.info(f"Initialized SentenceTransformer: {settings.sentence_transformer_model} on {device}")
+                logger.info(f"Optimal batch size: {embedding_config['batch_size']}")
             except Exception as e:
                 logger.error(f"Failed to initialize SentenceTransformer: {e}")
-                raise
+                # Fallback to CPU if GPU initialization fails
+                try:
+                    self.sentence_transformer = SentenceTransformer(
+                        settings.sentence_transformer_model,
+                        device='cpu'
+                    )
+                    logger.info("Fallback to CPU for SentenceTransformer")
+                except Exception as fallback_error:
+                    logger.error(f"CPU fallback also failed: {fallback_error}")
+                    raise
         
         elif self.provider == "openai":
             if not settings.openai_api_key:
@@ -408,7 +425,7 @@ class EmbeddingGenerator:
     
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
         """
-        Generate embeddings for a list of texts
+        Generate embeddings for a list of texts with optimal resource utilization
         
         Args:
             texts: List of text strings to embed
@@ -427,16 +444,51 @@ class EmbeddingGenerator:
             raise ValueError(f"Unsupported provider: {self.provider}")
     
     def _generate_sentence_transformer_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Generate embeddings using SentenceTransformer"""
+        """Generate embeddings using SentenceTransformer with optimal resource utilization"""
         try:
-            embeddings = self.sentence_transformer.encode(
-                texts,
-                convert_to_numpy=True,
-                show_progress_bar=len(texts) > 10
-            )
-            return embeddings.tolist()
+            # Get optimal batch size from resource manager
+            optimal_batch_size = self.resource_manager.get_optimal_batch_size('embedding', len(texts))
+            
+            # Check if we should use GPU for this operation
+            use_gpu = self.resource_manager.should_use_gpu_for_operation('embedding', len(texts))
+            
+            # Log resource allocation decision
+            logger.debug(f"Processing {len(texts)} texts with batch_size={optimal_batch_size}, use_gpu={use_gpu}")
+            
+            # Process in optimal batches if we have many texts
+            if len(texts) > optimal_batch_size:
+                all_embeddings = []
+                for i in range(0, len(texts), optimal_batch_size):
+                    batch = texts[i:i + optimal_batch_size]
+                    batch_embeddings = self.sentence_transformer.encode(
+                        batch,
+                        convert_to_numpy=True,
+                        show_progress_bar=False,  # Disable for batches
+                        batch_size=optimal_batch_size
+                    )
+                    all_embeddings.extend(batch_embeddings.tolist())
+                    
+                    # Log progress for large operations
+                    if len(texts) > 100:
+                        progress = min(100, ((i + len(batch)) / len(texts)) * 100)
+                        logger.info(f"Embedding progress: {progress:.1f}%")
+                
+                return all_embeddings
+            else:
+                # Process all at once for smaller batches
+                embeddings = self.sentence_transformer.encode(
+                    texts,
+                    convert_to_numpy=True,
+                    show_progress_bar=len(texts) > 10,
+                    batch_size=optimal_batch_size
+                )
+                return embeddings.tolist()
+                
         except Exception as e:
             logger.error(f"Failed to generate SentenceTransformer embeddings: {e}")
+            # Monitor resource usage on failure
+            usage = self.resource_manager.monitor_resource_usage()
+            logger.error(f"Resource usage at failure: {usage}")
             raise
     
     def _generate_openai_embeddings(self, texts: List[str]) -> List[List[float]]:
@@ -476,20 +528,25 @@ class EmbeddingGenerator:
 
 
 class FAISSIndexManager:
-    """Manages FAISS indices for vector storage and retrieval"""
+    """Manages FAISS indices for vector storage and retrieval with intelligent resource management"""
     
     def __init__(self):
         self.embedding_generator = EmbeddingGenerator()
         self.embedding_dim = self.embedding_generator.get_embedding_dimension()
+        self.resource_manager = get_resource_manager()
         self.indices = {}  # repo_id -> faiss.Index
         self.metadata_store = {}  # repo_id -> List[Dict]
         
         # Create embeddings storage directory
         os.makedirs(settings.embeddings_storage_path, exist_ok=True)
+        
+        # Log FAISS configuration
+        faiss_config = self.resource_manager.get_faiss_config()
+        logger.info(f"FAISS configuration: {faiss_config}")
     
     def create_index_for_repo(self, repo_id: str) -> faiss.Index:
         """
-        Create a new FAISS index for a repository
+        Create a new FAISS index for a repository with optimal configuration
         
         Args:
             repo_id: Repository identifier
@@ -497,6 +554,9 @@ class FAISSIndexManager:
         Returns:
             FAISS index
         """
+        # Get FAISS configuration from resource manager
+        faiss_config = self.resource_manager.get_faiss_config()
+        
         if settings.faiss_index_type == "IndexFlatIP":
             # Inner product (cosine similarity with normalized vectors)
             index = faiss.IndexFlatIP(self.embedding_dim)
@@ -512,15 +572,21 @@ class FAISSIndexManager:
             # Default to flat IP
             index = faiss.IndexFlatIP(self.embedding_dim)
         
-        # Try to use GPU if available and enabled
-        if settings.use_gpu_for_faiss and settings.check_gpu_availability():
+        # Use GPU if resource manager recommends it and it's available
+        if faiss_config['use_gpu'] and faiss_config['gpu_device'] is not None:
             try:
-                import faiss.contrib.torch_utils
-                res = faiss.StandardGpuResources()
-                index = faiss.index_cpu_to_gpu(res, settings.faiss_gpu_device, index)
-                logger.info(f"Using GPU for FAISS index: {repo_id}")
+                # Check current GPU usage before allocating
+                usage = self.resource_manager.monitor_resource_usage()
+                if usage['gpu_memory_percent'] < 80:  # Only use GPU if memory is available
+                    res = faiss.StandardGpuResources()
+                    index = faiss.index_cpu_to_gpu(res, faiss_config['gpu_device'], index)
+                    logger.info(f"Using GPU device {faiss_config['gpu_device']} for FAISS index: {repo_id}")
+                else:
+                    logger.info(f"GPU memory usage too high ({usage['gpu_memory_percent']:.1f}%), using CPU for FAISS")
             except Exception as e:
                 logger.warning(f"Failed to use GPU for FAISS, falling back to CPU: {e}")
+        else:
+            logger.info(f"Using CPU for FAISS index: {repo_id} (resource manager recommendation)")
         
         self.indices[repo_id] = index
         self.metadata_store[repo_id] = []

@@ -254,8 +254,20 @@ class SystemMonitor:
             # Process metrics
             process_count = len(psutil.pids())
             
-            # Current process metrics
-            process_info = self.process.as_dict(['num_threads', 'num_fds'])
+            # Current process metrics (Windows compatible)
+            try:
+                if hasattr(psutil.Process, 'num_fds') and hasattr(self.process, 'num_fds'):
+                    # Unix/Linux systems
+                    process_info = self.process.as_dict(['num_threads', 'num_fds'])
+                    file_descriptors = process_info.get('num_fds', 0)
+                else:
+                    # Windows systems (no file descriptor concept)
+                    process_info = self.process.as_dict(['num_threads'])
+                    file_descriptors = 0
+            except Exception:
+                # Fallback for any platform issues
+                process_info = {'num_threads': 0}
+                file_descriptors = 0
             
             return SystemMetrics(
                 cpu_percent=cpu_percent,
@@ -268,7 +280,7 @@ class SystemMonitor:
                 network_bytes_recv=network.bytes_recv,
                 process_count=process_count,
                 thread_count=process_info.get('num_threads', 0),
-                file_descriptors=process_info.get('num_fds', 0)
+                file_descriptors=file_descriptors
             )
             
         except Exception as e:

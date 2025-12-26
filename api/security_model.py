@@ -110,9 +110,12 @@ class SecurityModelBuilder:
             # Map component type
             comp_type = self._map_component_type(component_type, content)
             
+            # Create safe ID by replacing path separators
+            safe_path = file_info['file_path'].replace('/', '_').replace('\\', '_')
+            
             # Create component
             component = Component(
-                id=f"{repo_path.name}_{file_info['file_path'].replace('/', '_').replace('\\', '_')}",
+                id=f"{repo_path.name}_{safe_path}",
                 name=Path(file_info['file_path']).stem,
                 type=comp_type,
                 file_path=file_info['file_path'],
@@ -495,8 +498,11 @@ class SecurityModelBuilder:
             ))
             
             if has_security_config:
+                # Create safe path for ID
+                safe_path = rel_path.replace('/', '_').replace('\\', '_')
+                
                 component = Component(
-                    id=f"{repo_path.name}_{rel_path.replace('/', '_').replace('\\', '_')}",
+                    id=f"{repo_path.name}_{safe_path}",
                     name=config_file.stem,
                     type=ComponentType.MIDDLEWARE,  # Config files act as middleware
                     file_path=rel_path,
@@ -523,8 +529,11 @@ class SecurityModelBuilder:
             auth_mechanisms = self._detect_auth_mechanisms(content)
             handles_sensitive = self._detect_sensitive_data_patterns(content)
             
+            # Create safe path for ID
+            safe_path = rel_path.replace('/', '_').replace('\\', '_')
+            
             component = Component(
-                id=f"{repo_path.name}_{rel_path.replace('/', '_').replace('\\', '_')}",
+                id=f"{repo_path.name}_{safe_path}",
                 name=middleware_file.stem,
                 type=ComponentType.MIDDLEWARE,
                 file_path=rel_path,

@@ -13,7 +13,8 @@ from enum import Enum
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-from pydantic import BaseSettings, Field, validator, root_validator
+from pydantic_settings import BaseSettings
+from pydantic import Field, validator, root_validator
 from pydantic.types import SecretStr
 
 
@@ -35,6 +36,7 @@ class LLMProvider(str, Enum):
     AZURE = "azure"
     ANTHROPIC = "anthropic"
     HUGGINGFACE = "huggingface"
+    GOOGLE = "google"
 
 
 class EmbeddingProvider(str, Enum):
@@ -357,6 +359,14 @@ class Settings(BaseSettings):
     azure_openai_api_version: str = Field(default="2023-12-01-preview", description="Azure OpenAI API version")
     azure_openai_deployment_name: Optional[str] = Field(default=None, description="Azure OpenAI deployment name")
     
+    # Anthropic Configuration
+    anthropic_api_key: Optional[SecretStr] = Field(default=None, description="Anthropic API key")
+    anthropic_model: str = Field(default="claude-3-sonnet-20240229", description="Anthropic model name")
+    
+    # Google Gemini Configuration
+    google_api_key: Optional[SecretStr] = Field(default=None, description="Google AI API key")
+    google_model: str = Field(default="gemini-1.5-pro", description="Google Gemini model name")
+    
     # Embedding Configuration
     embedding_provider: EmbeddingProvider = Field(default=EmbeddingProvider.OPENAI, description="Embedding provider")
     embedding_model: str = Field(default="text-embedding-ada-002", description="Embedding model name")
@@ -463,7 +473,7 @@ class Settings(BaseSettings):
         
         return v
     
-    @root_validator
+    @root_validator(skip_on_failure=True)
     def validate_provider_configs(cls, values):
         """Validate provider-specific configurations"""
         llm_provider = values.get('llm_provider')

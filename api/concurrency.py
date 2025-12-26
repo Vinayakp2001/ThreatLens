@@ -1,16 +1,29 @@
 """
 Concurrency control and file locking for analysis pipeline
+Cross-platform compatible (Windows/Unix)
 """
-import fcntl
 import os
 import time
 import logging
 import threading
 from pathlib import Path
-from typing import Optional, Dict, Any, Set
+from typing import Optional, Dict, Any, Set, List
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+
+# Cross-platform file locking
+try:
+    import fcntl
+    HAS_FCNTL = True
+except ImportError:
+    # Windows doesn't have fcntl, use alternative locking
+    HAS_FCNTL = False
+    try:
+        import msvcrt
+        HAS_MSVCRT = True
+    except ImportError:
+        HAS_MSVCRT = False
 
 from .config import settings
 
@@ -87,7 +100,16 @@ class FileLockManager:
             while time.time() - start_time < timeout:
                 try:
                     lock_fd = os.open(lock_file, os.O_CREAT | os.O_WRONLY | os.O_TRUNC)
-                    fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    
+                    # Cross-platform file locking
+                    if HAS_FCNTL:
+                        # Unix/Linux/Mac
+                        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    elif HAS_MSVCRT:
+                        # Windows
+                        msvcrt.locking(lock_fd, msvcrt.LK_NBLCK, 1)
+                    # If neither available, rely on file creation atomicity
+                    
                     break
                 except (OSError, IOError) as e:
                     if lock_fd:
@@ -130,7 +152,15 @@ class FileLockManager:
             finally:
                 # Release lock
                 try:
-                    fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                    # Cross-platform lock release
+                    if HAS_FCNTL:
+                        # Unix/Linux/Mac
+                        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                    elif HAS_MSVCRT:
+                        # Windows
+                        msvcrt.locking(lock_fd, msvcrt.LK_UNLCK, 1)
+                    # Fallback: no explicit unlock needed
+                    
                     os.close(lock_fd)
                     lock_file.unlink(missing_ok=True)
                     

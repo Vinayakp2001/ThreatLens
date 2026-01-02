@@ -534,6 +534,10 @@ class Settings(BaseSettings):
                 self.azure_openai_api_key,
                 self.azure_openai_deployment_name
             ])
+        elif self.llm_provider == LLMProvider.GOOGLE:
+            return self.google_api_key is not None
+        elif self.llm_provider == LLMProvider.ANTHROPIC:
+            return self.anthropic_api_key is not None
         return False
     
     def check_gpu_availability(self) -> bool:

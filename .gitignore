@@ -187,5 +187,96 @@ models/
 *.zip
 *.rar
 
-# Kiro IDE
+# Development and IDE files
 .kiro/
+.vscode/
+.idea/
+
+# Development test files
+test_*.py
+test_*.ps1
+debug_*.py
+migrate_*.py
+*.log
+
+# Backup and temporary directories
+*-backup/
+*-temp/
+backup/
+temp/
+
+# Node.js (for frontend)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+
+# Frontend build artifacts
+dist/
+build/
+.next/
+out/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+data/
+storage/
+
+# Cache directories
+.cache/
+__pycache__/
+.pytest_cache/
+
+# Environment and configuration
+.env
+.env.local
+.env.production
+.env.development
+config.json
+secrets/
+
+# Logs and monitoring
+logs/
+*.log
+monitoring/
+
+# AI/ML model files
+models/
+*.pkl
+*.joblib
+embeddings/
+*.index
+*.metadata
+
+# Large files and archives
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Editor backups
+*~
+*.bak
+*.backup
+*.swp
+*.swo
+
+# Package manager files
+package-lock.json
+yarn.lock
+Pipfile.lock
+poetry.lock

@@ -1,68 +1,124 @@
-# ThreatLens
+# ThreatLens - Security Wiki Generator
 
-An AI-powered tool that automatically generates comprehensive threat modeling documentation from code repositories using OWASP methodologies and Large Language Models (LLMs).
+<div align="center">
+
+![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)
+![Vue.js](https://img.shields.io/badge/Vue.js-3.0+-brightgreen.svg)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Docker](https://img.shields.io/badge/docker-supported-blue.svg)
+![AI](https://img.shields.io/badge/AI-powered-orange.svg)
+
+**An AI-powered security documentation platform that automatically generates comprehensive security analysis from code repositories**
+
+[Features](#features) • [Installation](#installation) • [Usage](#usage) • [API Documentation](#api-documentation) • [Contributing](#contributing)
+
+</div>
+
+---
+
+## Overview
+
+ThreatLens transforms code repositories into comprehensive security documentation using advanced AI analysis. Built for security professionals, it provides DeepWiki-style documentation generation specifically focused on security assessment and vulnerability analysis.
+
+The platform offers dual analysis modes: complete repository security assessment and context-aware pull request security reviews, powered by retrieval-augmented generation (RAG) for intelligent, contextual analysis.
 
 ## Features
 
-- **Automated Repository Analysis**: Analyzes code repositories to identify components, data flows, and security patterns
-- **AI-Powered Documentation**: Uses LLMs to generate OWASP-compliant threat modeling documents
-- **STRIDE Methodology**: Implements STRIDE threat modeling framework for comprehensive security analysis
-- **RAG-Enhanced Context**: Uses Retrieval-Augmented Generation for improved document quality
-- **Multiple LLM Providers**: Supports OpenAI, Azure OpenAI, and other compatible providers
-- **REST API**: Complete FastAPI-based REST API for integration
-- **Real-time Monitoring**: Comprehensive monitoring, metrics, and alerting system
-- **Scalable Architecture**: Built for production with error recovery and concurrency control
+### Core Capabilities
 
-## Generated Documents
+**Comprehensive Security Analysis**
+- Authentication and authorization mechanism assessment
+- Data flow security and privacy analysis
+- API security evaluation based on OWASP guidelines
+- Automated vulnerability identification and risk assessment
+- Actionable security recommendations and remediation guidance
 
-The system generates four types of threat modeling documents:
+**AI-Powered Intelligence**
+- Support for multiple LLM providers (OpenAI, Azure OpenAI, compatible APIs)
+- Advanced RAG system with FAISS vector search
+- Context-aware analysis using existing repository knowledge
+- Intelligent resource management with GPU/CPU optimization
 
-1. **System Security Overview**: High-level security architecture and components
-2. **Component Security Profiles**: Detailed security analysis for each component
-3. **Flow Threat Models**: STRIDE-based threat analysis for data flows
-4. **Mitigations & Requirements**: Security recommendations and implementation guidance
+**Dual Analysis Modes**
+- **Repository Analysis**: Complete security assessment with knowledge base creation
+- **PR Security Review**: Context-aware security analysis of pull requests
+- Smart routing between analysis modes based on available context
+- Integration with GitHub API for seamless PR analysis
+
+**Production-Ready Architecture**
+- RESTful API built with FastAPI
+- Modern Vue.js frontend with responsive design
+- SQLite database with comprehensive migration system
+- Docker containerization support
+- Comprehensive monitoring and metrics collection
+
+## Architecture
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Vue.js        │    │   FastAPI       │    │   Security      │
+│   Frontend      │───▶│   REST API      │───▶│   Wiki Gen      │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   PR Analysis   │    │   Repository    │    │   Knowledge     │
+│   Interface     │◀───│   Analyzer      │───▶│   Base Manager  │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   RAG System    │    │   FAISS Vector  │    │   LLM Client    │
+│   (Embeddings)  │◀───│   Search        │◀───│   (OpenAI)      │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
 
 ## Installation
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.8 or higher
+- Node.js 16.0 or higher
+- OpenAI API key or compatible LLM provider
 - Git
-- OpenAI API key (or compatible LLM provider)
 
 ### Quick Start
 
-1. **Clone the repository**:
+1. **Clone the repository**
 ```bash
 git clone https://github.com/Vinayakp2001/ThreatLens.git
 cd ThreatLens
 ```
 
-2. **Install dependencies**:
+2. **Backend setup**
 ```bash
 pip install -r requirements.txt
-```
-
-3. **Configure the application**:
-```bash
 cp .env.example .env
-# Edit .env with your configuration
+# Configure your API keys and settings in .env
 ```
 
-4. **Start the application**:
+3. **Frontend setup**
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
+```
+
+4. **Start the application**
 ```bash
 python -m uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
 
-5. **Access the API**:
+5. **Access the application**
+- Frontend: http://localhost:5173
 - API Documentation: http://localhost:8000/docs
 - Health Check: http://localhost:8000/health
 
 ## Configuration
 
-The application uses environment variables for configuration. See [Configuration Guide](config/README.md) for detailed information.
-
-### Essential Configuration
+### Environment Variables
 
 ```env
 # LLM Configuration
@@ -70,210 +126,158 @@ LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-your-api-key-here
 OPENAI_MODEL=gpt-4
 
+# GitHub Integration
+GITHUB_TOKEN=ghp_your-github-token
+
 # Storage Configuration
 STORAGE_BASE_PATH=./storage
-MAX_REPO_SIZE_MB=100
-MAX_CONCURRENT_ANALYSES=5
+DATABASE_PATH=./data/threatlens.db
 
 # Security Configuration
 ALLOWED_REPO_HOSTS=["github.com", "gitlab.com", "bitbucket.org"]
 ENABLE_LOCAL_REPOS=true
 ```
 
+For detailed configuration options, see the [Configuration Guide](config/README.md).
+
 ## Usage
+
+### Web Interface
+
+**Repository Analysis**
+1. Navigate to the main interface
+2. Enter repository URL or local path
+3. Click "Analyze Repository"
+4. Review generated security documentation
+
+**PR Security Review**
+1. Switch to "PR Analysis" mode
+2. Enter PR URL (e.g., `https://github.com/user/repo/pull/123`)
+3. Receive context-aware security assessment
+4. Review security impact and recommendations
 
 ### API Endpoints
 
 #### Repository Analysis
 ```bash
-# Analyze a GitHub repository
-curl -X POST "http://localhost:8000/analyze_repo" \
+curl -X POST "http://localhost:8000/analyze" \
   -H "Content-Type: application/json" \
   -d '{"repo_url": "https://github.com/user/repo.git"}'
-
-# Analyze a local repository
-curl -X POST "http://localhost:8000/analyze_repo" \
-  -H "Content-Type: application/json" \
-  -d '{"local_path": "/path/to/repo"}'
 ```
 
-#### Document Retrieval
+#### PR Security Analysis
 ```bash
-# Get all documents for a repository
-curl "http://localhost:8000/repos/{repo_id}/documents"
+curl -X POST "http://localhost:8000/analyze_pr" \
+  -H "Content-Type: application/json" \
+  -d '{"pr_url": "https://github.com/user/repo/pull/123"}'
+```
 
-# Get a specific document
-curl "http://localhost:8000/repos/{repo_id}/documents/{doc_id}"
+#### Repository Status Check
+```bash
+curl "http://localhost:8000/repo_status/user-repo"
+```
 
-# Search documents
+#### Security Knowledge Search
+```bash
 curl -X POST "http://localhost:8000/search_docs" \
   -H "Content-Type: application/json" \
-  -d '{"query": "authentication vulnerabilities", "limit": 10}'
+  -d '{"query": "authentication vulnerabilities", "repo_id": "user-repo"}'
 ```
 
-#### System Monitoring
+## Security Analysis Features
+
+### Comprehensive Assessment
+- **OWASP Top 10 Analysis**: Automated detection of common vulnerabilities
+- **Authentication Review**: In-depth analysis of authentication mechanisms
+- **Authorization Assessment**: Access control and privilege evaluation
+- **Data Flow Security**: Data protection and privacy compliance analysis
+- **API Security**: RESTful API security evaluation
+
+### Context-Aware PR Analysis
+- **Change Impact Assessment**: Security implications of code modifications
+- **Risk Evaluation**: Automated risk scoring for pull request changes
+- **Contextual Recommendations**: Security guidance based on repository knowledge
+- **Integration Analysis**: Impact assessment on existing security controls
+
+## Docker Deployment
+
+### Using Docker Compose
 ```bash
-# Get system health
-curl "http://localhost:8000/health/comprehensive"
-
-# Get metrics
-curl "http://localhost:8000/metrics"
-
-# Get system diagnostics
-curl "http://localhost:8000/diagnostics"
+docker-compose up -d
 ```
 
-### Python SDK Example
-
-```python
-import httpx
-
-# Initialize client
-client = httpx.Client(base_url="http://localhost:8000")
-
-# Analyze repository
-response = client.post("/analyze_repo", json={
-    "repo_url": "https://github.com/user/repo.git"
-})
-analysis = response.json()
-
-# Get generated documents
-docs_response = client.get(f"/repos/{analysis['repo_id']}/documents")
-documents = docs_response.json()
-
-print(f"Generated {len(documents['documents'])} threat modeling documents")
+### Manual Docker Build
+```bash
+docker build -t threatlens .
+docker run -p 8000:8000 -e OPENAI_API_KEY=your-key threatlens
 ```
 
-## Architecture
+## API Documentation
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   FastAPI       │    │   Repository    │    │   Security      │
-│   REST API      │───▶│   Ingestor      │───▶│   Model Builder │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Document      │    │   RAG System    │    │   LLM Client    │
-│   Generator     │◀───│   (FAISS)       │◀───│   (OpenAI)      │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   SQLite        │    │   Storage       │    │   Monitoring    │
-│   Database      │    │   Manager       │    │   & Metrics     │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
+Interactive API documentation is available at `/docs` when the application is running. The API provides comprehensive endpoints for:
 
-## Monitoring & Operations
-
-The system includes comprehensive monitoring and operational features:
-
-- **Real-time Metrics**: System and application metrics collection
-- **Health Checks**: Automated health monitoring for all components
-- **Alerting**: Configurable alerts for system issues
-- **Performance Tracking**: Request timing, throughput, and error rates
-- **Storage Management**: Automated cleanup and quota management
-- **Configuration Management**: Hot-reloadable configuration with validation
-
-Access monitoring endpoints:
-- Metrics: `/metrics`
-- Health: `/health/comprehensive`
-- Diagnostics: `/diagnostics`
-- Alerts: `/alerts`
-
-## Security Considerations
-
-- **API Keys**: Store API keys securely using environment variables
-- **Repository Access**: Configure allowed repository hosts
-- **Local Repository Access**: Disable in production if not needed
-- **CORS Configuration**: Set appropriate CORS origins for production
-- **Debug Mode**: Never enable debug mode in production
-
-## Deployment
-
-### Docker Deployment
-
-```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-COPY . .
-
-EXPOSE 8000
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-### Production Configuration
-
-```env
-DEBUG=false
-LOG_LEVEL=INFO
-ENABLE_CONFIG_HOT_RELOAD=false
-MAX_CONCURRENT_ANALYSES=10
-CORS_ORIGINS=["https://yourdomain.com"]
-```
+- Repository analysis and management
+- PR security assessment
+- Security knowledge search and retrieval
+- System health and monitoring
+- Configuration management
 
 ## Development
 
 ### Running Tests
-
 ```bash
-# Install development dependencies
-pip install pytest pytest-asyncio
+# Backend tests
+pytest api/tests/
 
-# Run tests
-pytest tests/
+# Frontend tests
+cd frontend && npm test
 ```
 
 ### Code Quality
-
 ```bash
-# Format code
+# Python code formatting
 black api/
 
-# Lint code
+# Python linting
 flake8 api/
 
-# Type checking
-mypy api/
+# Frontend formatting
+cd frontend && npm run format
 ```
-
-## Documentation
-
-- [Configuration Guide](config/README.md) - Comprehensive configuration documentation
-- [API Documentation](http://localhost:8000/docs) - Interactive API documentation
-- [Architecture Design](.kiro/specs/threat-modeling-generator/design.md) - System architecture and design
-- [Requirements](.kiro/specs/threat-modeling-generator/requirements.md) - System requirements and specifications
 
 ## Contributing
 
+We welcome contributions from the security and development community. Please read our contributing guidelines before submitting pull requests.
+
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
+2. Create a feature branch (`git checkout -b feature/security-enhancement`)
+3. Commit your changes (`git commit -m 'Add security enhancement'`)
+4. Push to the branch (`git push origin feature/security-enhancement`)
 5. Open a Pull Request
+
+## Documentation
+
+- **[API Documentation](http://localhost:8000/docs)** - Interactive API reference
+- **[Configuration Guide](config/README.md)** - Comprehensive configuration documentation
+- **[GitHub Integration](config/github_setup.md)** - GitHub API setup and configuration
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
-- [OWASP Threat Modeling](https://owasp.org/www-community/Threat_Modeling) - Methodology and best practices
-- [STRIDE Framework](https://docs.microsoft.com/en-us/azure/security/develop/threat-modeling-tool-threats) - Threat categorization
-- [FastAPI](https://fastapi.tiangolo.com/) - Modern web framework for APIs
-- [OpenAI](https://openai.com/) - Large Language Model capabilities
+- **[DeepWiki](https://github.com/deepwiki/deepwiki)** - Inspiration for comprehensive documentation generation
+- **[OWASP](https://owasp.org/)** - Security methodologies and best practices
+- **[FastAPI](https://fastapi.tiangolo.com/)** - Modern Python web framework
+- **[Vue.js](https://vuejs.org/)** - Progressive JavaScript framework
 
 ## Support
 
-- Create an [Issue](https://github.com/Vinayakp2001/ThreatLens/issues) for bug reports or feature requests
-- Check the [Documentation](config/README.md) for configuration help
-- Review [API Documentation](http://localhost:8000/docs) for usage examples
+- **Issues**: [GitHub Issues](https://github.com/Vinayakp2001/ThreatLens/issues)
+- **Documentation**: [Configuration Guide](config/README.md)
+- **API Reference**: [Interactive Documentation](http://localhost:8000/docs)
 
 ---
 
-**ThreatLens - Built with ❤️ for the security community**
+**ThreatLens - Security Documentation Made Intelligent**

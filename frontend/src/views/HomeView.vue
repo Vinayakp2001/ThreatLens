@@ -7,24 +7,32 @@
           ThreatLens
         </h1>
         <p class="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-          GPU-powered threat modeling documentation generator. 
-          Analyze your code repositories to identify security threats and generate comprehensive threat models.
+          GPU-powered security documentation generator. 
+          Analyze repositories or pull requests to generate comprehensive security analysis and documentation.
         </p>
       </div>
 
       <!-- Main Content -->
       <div class="space-y-12">
-        <!-- Repository Analysis Form -->
+        <!-- Analysis Mode Selection -->
         <section>
           <div class="text-center mb-8">
-            <h2 class="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              Analyze Repository
+            <h2 class="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-6">
+              Choose Analysis Mode
             </h2>
-            <p class="text-gray-600 dark:text-gray-400">
-              Enter a Git repository URL to start threat modeling analysis
-            </p>
           </div>
-          <RepoForm @analysis-started="handleAnalysisStarted" />
+          
+          <AnalysisModeToggle v-model="analysisMode" />
+          
+          <!-- Repository Analysis Form -->
+          <div v-if="analysisMode === 'repository'">
+            <RepoForm @analysis-started="handleRepoAnalysisStarted" />
+          </div>
+          
+          <!-- PR Analysis Form -->
+          <div v-else>
+            <PRForm @analysis-started="handlePRAnalysisStarted" />
+          </div>
         </section>
 
         <!-- Features Overview -->
@@ -52,10 +60,10 @@
                 <AlertTriangle class="w-6 h-6 text-red-600 dark:text-red-400" />
               </div>
               <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                Threat Identification
+                Security Assessment
               </h3>
               <p class="text-gray-600 dark:text-gray-400 text-sm">
-                Uses STRIDE methodology to identify potential security threats and vulnerabilities
+                Identifies potential security threats, vulnerabilities, and provides comprehensive security analysis
               </p>
             </div>
             
@@ -67,7 +75,7 @@
                 Documentation
               </h3>
               <p class="text-gray-600 dark:text-gray-400 text-sm">
-                Generates comprehensive threat modeling documentation with mitigation strategies
+                Generates comprehensive security documentation with recommendations and mitigation strategies
               </p>
             </div>
           </div>
@@ -78,17 +86,28 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { CheckCircle, AlertTriangle, FileText } from 'lucide-vue-next'
 import RepoForm from '@/components/RepoForm.vue'
-import type { AnalyzeRepoResponse } from '@/lib/types'
+import PRForm from '@/components/PRForm.vue'
+import AnalysisModeToggle from '@/components/AnalysisModeToggle.vue'
+import type { AnalyzeRepoResponse, AnalyzePRResponse } from '@/lib/types'
 
 const router = useRouter()
+const analysisMode = ref<'repository' | 'pr'>('repository')
 
-const handleAnalysisStarted = (response: AnalyzeRepoResponse, repoUrl: string) => {
+const handleRepoAnalysisStarted = (response: AnalyzeRepoResponse, repoUrl: string) => {
   // Navigate to the repository page after a short delay to show the status
   setTimeout(() => {
     router.push(`/${response.repo_id}`)
+  }, 2000)
+}
+
+const handlePRAnalysisStarted = (response: AnalyzePRResponse, prUrl: string) => {
+  // Navigate to the PR analysis page after a short delay to show the status
+  setTimeout(() => {
+    router.push(`/pr/${response.pr_id}`)
   }, 2000)
 }
 </script>

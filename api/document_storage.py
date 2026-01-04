@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from pathlib import Path
 
-from .models import ThreatDoc, ThreatDocType, CodeReference, RepoContext
+from .models import ThreatDoc, SecurityDocument, CodeReference, RepoContext
 from .database import DatabaseManager
 from .config import settings
 
@@ -24,37 +24,43 @@ class DocumentStorageService:
         self.docs_storage_path = Path(settings.docs_storage_path)
         self.docs_storage_path.mkdir(parents=True, exist_ok=True)
     
-    def save_document(self, threat_doc: ThreatDoc) -> bool:
-        """Save threat document with both database and file storage"""
+    def save_document(self, document) -> bool:
+        """Save document (ThreatDoc or SecurityDocument) with both database and file storage"""
         try:
-            # Save to database
-            db_success = self.db_manager.save_threat_doc(threat_doc)
+            # Handle both legacy ThreatDoc and new SecurityDocument
+            if hasattr(document, 'doc_type'):
+                # Legacy ThreatDoc
+                db_success = self.db_manager.save_threat_doc(document)
+            else:
+                # New SecurityDocument
+                db_success = self.db_manager.save_security_document(document)
+            
             if not db_success:
-                logger.error(f"Failed to save document {threat_doc.id} to database")
+                logger.error(f"Failed to save document {document.id} to database")
                 return False
             
             # Save to file system for backup and direct access
-            file_success = self._save_document_to_file(threat_doc)
+            file_success = self._save_document_to_file(document)
             if not file_success:
-                logger.warning(f"Failed to save document {threat_doc.id} to file system")
+                logger.warning(f"Failed to save document {document.id} to file system")
                 # Don't fail the operation if file save fails, database is primary
             
-            logger.info(f"Successfully saved document {threat_doc.id}")
+            logger.info(f"Successfully saved document {document.id}")
             return True
             
         except Exception as e:
-            logger.error(f"Error saving document {threat_doc.id}: {e}")
+            logger.error(f"Error saving document {document.id}: {e}")
             return False
     
-    def save_documents_batch(self, threat_docs: List[ThreatDoc]) -> Dict[str, bool]:
-        """Save multiple documents in batch with transaction support"""
+    def save_documents_batch(self, documents: List) -> Dict[str, bool]:
+        """Save multiple documents (ThreatDoc or SecurityDocument) in batch with transaction support"""
         results = {}
         
-        for doc in threat_docs:
+        for doc in documents:
             results[doc.id] = self.save_document(doc)
         
         successful_saves = sum(1 for success in results.values() if success)
-        logger.info(f"Batch save completed: {successful_saves}/{len(threat_docs)} documents saved")
+        logger.info(f"Batch save completed: {successful_saves}/{len(documents)} documents saved")
         
         return results
     
@@ -175,18 +181,24 @@ class DocumentStorageService:
             logger.error(f"Error exporting documents: {e}")
             return None
     
-    def _save_document_to_file(self, threat_doc: ThreatDoc) -> bool:
-        """Save document to file system"""
+    def _save_document_to_file(self, document) -> bool:
+        """Save document (ThreatDoc or SecurityDocument) to file system"""
         try:
-            repo_dir = self.docs_storage_path / threat_doc.repo_id
+            repo_dir = self.docs_storage_path / document.repo_id
             repo_dir.mkdir(exist_ok=True)
             
             # Create filename based on document type and ID
-            filename = f"{threat_doc.doc_type.value}_{threat_doc.id}.md"
+            if hasattr(document, 'doc_type'):
+                # Legacy ThreatDoc
+                filename = f"{document.doc_type}_{document.id}.md"
+            else:
+                # New SecurityDocument
+                filename = f"security_analysis_{document.id}.md"
+            
             file_path = repo_dir / filename
             
             # Create document content with metadata header
-            content = self._create_file_content(threat_doc)
+            content = self._create_file_content(document)
             
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(content)
@@ -197,24 +209,39 @@ class DocumentStorageService:
             logger.error(f"Error saving document to file: {e}")
             return False
     
-    def _create_file_content(self, threat_doc: ThreatDoc) -> str:
-        """Create file content with metadata header"""
+    def _create_file_content(self, document) -> str:
+        """Create file content with metadata header for ThreatDoc or SecurityDocument"""
+        # Handle both legacy ThreatDoc and new SecurityDocument
+        if hasattr(document, 'doc_type'):
+            # Legacy ThreatDoc
+            doc_type = document.doc_type if isinstance(document.doc_type, str) else document.doc_type.value
+        else:
+            # New SecurityDocument
+            doc_type = "security_analysis"
+        
         metadata_header = f"""---
-id: {threat_doc.id}
-repo_id: {threat_doc.repo_id}
-doc_type: {threat_doc.doc_type.value}
-title: {threat_doc.title}
-created_at: {threat_doc.created_at.isoformat()}
-updated_at: {threat_doc.updated_at.isoformat() if threat_doc.updated_at else 'null'}
-version: {threat_doc.metadata.get('version', 1)}
----
-
+id: {document.id}
+repo_id: {document.repo_id}
+doc_type: {doc_type}
+title: {document.title}
+created_at: {document.created_at.isoformat()}
+updated_at: {document.updated_at.isoformat() if document.updated_at else 'null'}
 """
         
+        # Add scope for SecurityDocument
+        if hasattr(document, 'scope'):
+            metadata_header += f"scope: {document.scope}\n"
+        
+        # Add version for ThreatDoc
+        if hasattr(document, 'doc_type'):
+            metadata_header += f"version: {document.metadata.get('version', 1)}\n"
+        
+        metadata_header += "---\n\n"
+        
         # Add code references section if present
-        if threat_doc.code_references:
+        if document.code_references:
             code_refs_section = "\n## Code References\n\n"
-            for ref in threat_doc.code_references:
+            for ref in document.code_references:
                 code_refs_section += f"- **{ref.file_path}**"
                 if ref.function_name:
                     code_refs_section += f" (Function: {ref.function_name})"
@@ -225,9 +252,9 @@ version: {threat_doc.metadata.get('version', 1)}
                     code_refs_section += ")"
                 code_refs_section += "\n"
             
-            return metadata_header + threat_doc.content + code_refs_section
+            return metadata_header + document.content + code_refs_section
         
-        return metadata_header + threat_doc.content
+        return metadata_header + document.content
     
     def _cleanup_repository_files(self, repo_id: str) -> bool:
         """Clean up old files for a repository"""

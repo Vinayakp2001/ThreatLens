@@ -170,6 +170,14 @@ class ConfigurationManager:
         validation_result["checks"]["performance"] = performance_check
         validation_result["warnings"].extend(performance_check["warnings"])
         
+        # GitHub API validation
+        github_check = self._validate_github_config()
+        validation_result["checks"]["github"] = github_check
+        validation_result["warnings"].extend(github_check["warnings"])
+        if not github_check["valid"]:
+            validation_result["errors"].extend(github_check["errors"])
+            validation_result["valid"] = False
+        
         return validation_result
     
     def _validate_llm_config(self) -> Dict[str, Any]:
@@ -282,6 +290,53 @@ class ConfigurationManager:
         
         return result
     
+    def _validate_github_config(self) -> Dict[str, Any]:
+        """Validate GitHub API configuration"""
+        result = {"valid": True, "errors": [], "warnings": []}
+        
+        # Check GitHub token
+        if not self.settings.github_token:
+            result["warnings"].append("No GitHub token configured - PR analysis will have limited rate limits")
+        else:
+            token_value = self.settings.github_token.get_secret_value()
+            if len(token_value) < 20:
+                result["valid"] = False
+                result["errors"].append("GitHub token appears to be invalid (too short)")
+            
+            # Check token format (GitHub tokens start with specific prefixes)
+            valid_prefixes = ['ghp_', 'gho_', 'ghu_', 'ghs_', 'ghr_']
+            if not any(token_value.startswith(prefix) for prefix in valid_prefixes):
+                result["warnings"].append("GitHub token format may be invalid - ensure it's a valid personal access token")
+        
+        # Validate rate limits
+        if self.settings.github_requests_per_hour <= 0:
+            result["valid"] = False
+            result["errors"].append("GitHub requests per hour must be positive")
+        
+        if self.settings.github_requests_per_minute <= 0:
+            result["valid"] = False
+            result["errors"].append("GitHub requests per minute must be positive")
+        
+        # Check if rate limits are reasonable
+        if self.settings.github_requests_per_hour > 5000:
+            result["warnings"].append("GitHub requests per hour is very high - may exceed API limits")
+        
+        if self.settings.github_requests_per_minute > 100:
+            result["warnings"].append("GitHub requests per minute is very high - may exceed API limits")
+        
+        # Validate timeout settings
+        if self.settings.github_timeout_seconds < 5:
+            result["warnings"].append("GitHub API timeout is very short - may cause request failures")
+        
+        if self.settings.github_timeout_seconds > 120:
+            result["warnings"].append("GitHub API timeout is very long - may cause slow responses")
+        
+        # Validate retry settings
+        if self.settings.github_retry_attempts > 5:
+            result["warnings"].append("High GitHub retry attempts may cause slow responses on failures")
+        
+        return result
+    
     def start_file_watcher(self):
         """Start watching configuration files for changes"""
         if self.file_observer:
@@ -367,6 +422,15 @@ class Settings(BaseSettings):
     google_api_key: Optional[SecretStr] = Field(default=None, description="Google AI API key")
     google_model: str = Field(default="gemini-1.5-pro", description="Google Gemini model name")
     
+    # GitHub API Configuration
+    github_token: Optional[SecretStr] = Field(default=None, description="GitHub personal access token for PR analysis")
+    github_api_base_url: str = Field(default="https://api.github.com", description="GitHub API base URL")
+    github_requests_per_hour: int = Field(default=5000, ge=1, description="GitHub API requests per hour limit")
+    github_requests_per_minute: int = Field(default=100, ge=1, description="GitHub API requests per minute limit")
+    github_timeout_seconds: int = Field(default=30, ge=5, le=300, description="GitHub API request timeout in seconds")
+    github_retry_attempts: int = Field(default=3, ge=1, le=10, description="GitHub API retry attempts on failure")
+    github_retry_backoff_factor: float = Field(default=2.0, ge=1.0, le=10.0, description="GitHub API retry backoff factor")
+    
     # Embedding Configuration
     embedding_provider: EmbeddingProvider = Field(default=EmbeddingProvider.OPENAI, description="Embedding provider")
     embedding_model: str = Field(default="text-embedding-ada-002", description="Embedding model name")
@@ -432,6 +496,7 @@ class Settings(BaseSettings):
                 "debug": False,
                 "llm_provider": "openai",
                 "openai_api_key": "sk-...",
+                "github_token": "ghp_...",
                 "storage_base_path": "./storage",
                 "max_concurrent_analyses": 5
             }
@@ -441,7 +506,7 @@ class Settings(BaseSettings):
         super().__init__(**kwargs)
         self._create_storage_directories()
     
-    @validator('openai_api_key', 'azure_openai_api_key', pre=True)
+    @validator('openai_api_key', 'azure_openai_api_key', 'github_token', pre=True)
     def validate_api_keys(cls, v):
         """Validate API key format"""
         if v and isinstance(v, str):

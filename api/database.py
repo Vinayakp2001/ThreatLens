@@ -11,7 +11,8 @@ from datetime import datetime
 from pathlib import Path
 
 from api.config import settings
-from api.models import RepoContext, ThreatDoc, CodeReference
+from api.models import RepoContext, ThreatDoc, CodeReference, SecurityDocument, PRAnalysis
+from api.migrations import MigrationManager
 
 
 logger = logging.getLogger(__name__)
@@ -112,6 +113,47 @@ class DatabaseMigration:
                 CREATE INDEX IF NOT EXISTS idx_system_metrics_name ON system_metrics(metric_name);
                 CREATE INDEX IF NOT EXISTS idx_system_metrics_recorded ON system_metrics(recorded_at);
             """
+        },
+        {
+            "version": 4,
+            "description": "Add flexible security documentation and PR analysis support",
+            "sql": """
+                CREATE TABLE IF NOT EXISTS security_documents (
+                    id TEXT PRIMARY KEY,
+                    repo_id TEXT,
+                    title TEXT,
+                    content TEXT,
+                    scope TEXT,
+                    metadata TEXT,
+                    version INTEGER DEFAULT 1,
+                    is_current BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP,
+                    updated_at TIMESTAMP,
+                    FOREIGN KEY (repo_id) REFERENCES repositories (id)
+                );
+                
+                CREATE TABLE IF NOT EXISTS pr_analyses (
+                    id TEXT PRIMARY KEY,
+                    pr_id TEXT,
+                    repo_id TEXT,
+                    pr_url TEXT,
+                    changed_files TEXT,
+                    security_issues TEXT,
+                    recommendations TEXT,
+                    risk_level TEXT,
+                    has_repo_context BOOLEAN DEFAULT FALSE,
+                    context_used TEXT,
+                    created_at TIMESTAMP,
+                    FOREIGN KEY (repo_id) REFERENCES repositories (id)
+                );
+                
+                CREATE INDEX IF NOT EXISTS idx_security_docs_repo ON security_documents(repo_id);
+                CREATE INDEX IF NOT EXISTS idx_security_docs_scope ON security_documents(scope);
+                CREATE INDEX IF NOT EXISTS idx_security_docs_current ON security_documents(is_current);
+                CREATE INDEX IF NOT EXISTS idx_pr_analyses_repo ON pr_analyses(repo_id);
+                CREATE INDEX IF NOT EXISTS idx_pr_analyses_pr_id ON pr_analyses(pr_id);
+                CREATE INDEX IF NOT EXISTS idx_pr_analyses_risk ON pr_analyses(risk_level);
+            """
         }
     ]
     
@@ -141,8 +183,17 @@ class DatabaseManager:
         # Ensure database directory exists
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         
-        # Run migrations
-        self._run_migrations()
+        # Use the new migration manager
+        migration_manager = MigrationManager(self.db_path)
+        
+        # Apply all pending migrations
+        result = migration_manager.apply_migrations()
+        
+        if not result['success']:
+            logger.error(f"Database migration failed: {result['errors']}")
+            raise Exception(f"Database initialization failed: {result['errors']}")
+        
+        logger.info(f"Database initialized successfully with {len(result['migrations_applied'])} migrations applied")
         
         # Perform integrity check
         if not self.check_integrity():
@@ -628,6 +679,256 @@ class DatabaseManager:
         
         return stats
     
+    def save_security_document(self, security_doc: SecurityDocument) -> bool:
+        """Save security document to database"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                # Mark previous versions as not current
+                conn.execute("""
+                    UPDATE security_documents 
+                    SET is_current = FALSE 
+                    WHERE repo_id = ? AND title = ? AND is_current = TRUE
+                """, (security_doc.repo_id, security_doc.title))
+                
+                # Insert new security document
+                conn.execute("""
+                    INSERT OR REPLACE INTO security_documents 
+                    (id, repo_id, title, content, scope, metadata, version, is_current, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    security_doc.id,
+                    security_doc.repo_id,
+                    security_doc.title,
+                    security_doc.content,
+                    security_doc.scope,
+                    json.dumps(security_doc.metadata),
+                    1,  # version
+                    True,  # is_current
+                    security_doc.created_at.isoformat(),
+                    security_doc.updated_at.isoformat() if security_doc.updated_at else None
+                ))
+                
+                # Save code references
+                for ref in security_doc.code_references:
+                    conn.execute("""
+                        INSERT OR REPLACE INTO security_document_references
+                        (id, security_doc_id, file_path, line_start, line_end, function_name, class_name, code_snippet)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        ref.id,
+                        security_doc.id,
+                        ref.file_path,
+                        ref.line_start,
+                        ref.line_end,
+                        ref.function_name,
+                        ref.class_name,
+                        ref.code_snippet
+                    ))
+                
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error saving security document: {e}")
+            return False
+    
+    def get_security_document(self, doc_id: str) -> Optional[SecurityDocument]:
+        """Get security document by ID"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute("""
+                    SELECT id, repo_id, title, content, scope, metadata, created_at, updated_at
+                    FROM security_documents 
+                    WHERE id = ? AND is_current = TRUE
+                """, (doc_id,))
+                
+                row = cursor.fetchone()
+                if not row:
+                    return None
+                
+                # Get code references
+                ref_cursor = conn.execute("""
+                    SELECT id, file_path, line_start, line_end, function_name, class_name, code_snippet
+                    FROM security_document_references
+                    WHERE security_doc_id = ?
+                """, (doc_id,))
+                
+                code_references = []
+                for ref_row in ref_cursor:
+                    code_references.append(CodeReference(
+                        id=ref_row[0],
+                        file_path=ref_row[1],
+                        line_start=ref_row[2],
+                        line_end=ref_row[3],
+                        function_name=ref_row[4],
+                        class_name=ref_row[5],
+                        code_snippet=ref_row[6]
+                    ))
+                
+                return SecurityDocument(
+                    id=row[0],
+                    repo_id=row[1],
+                    title=row[2],
+                    content=row[3],
+                    scope=row[4],
+                    metadata=json.loads(row[5]) if row[5] else {},
+                    code_references=code_references,
+                    created_at=datetime.fromisoformat(row[6]),
+                    updated_at=datetime.fromisoformat(row[7]) if row[7] else None
+                )
+        except Exception as e:
+            logger.error(f"Error getting security document: {e}")
+            return None
+    
+    def get_security_documents_by_repo(self, repo_id: str, scope: Optional[str] = None) -> List[SecurityDocument]:
+        """Get all security documents for a repository"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                query = """
+                    SELECT id, repo_id, title, content, scope, metadata, created_at, updated_at
+                    FROM security_documents 
+                    WHERE repo_id = ? AND is_current = TRUE
+                """
+                params = [repo_id]
+                
+                if scope:
+                    query += " AND scope = ?"
+                    params.append(scope)
+                
+                cursor = conn.execute(query, params)
+                documents = []
+                
+                for row in cursor:
+                    # Get code references for this document
+                    ref_cursor = conn.execute("""
+                        SELECT id, file_path, line_start, line_end, function_name, class_name, code_snippet
+                        FROM security_document_references
+                        WHERE security_doc_id = ?
+                    """, (row[0],))
+                    
+                    code_references = []
+                    for ref_row in ref_cursor:
+                        code_references.append(CodeReference(
+                            id=ref_row[0],
+                            file_path=ref_row[1],
+                            line_start=ref_row[2],
+                            line_end=ref_row[3],
+                            function_name=ref_row[4],
+                            class_name=ref_row[5],
+                            code_snippet=ref_row[6]
+                        ))
+                    
+                    documents.append(SecurityDocument(
+                        id=row[0],
+                        repo_id=row[1],
+                        title=row[2],
+                        content=row[3],
+                        scope=row[4],
+                        metadata=json.loads(row[5]) if row[5] else {},
+                        code_references=code_references,
+                        created_at=datetime.fromisoformat(row[6]),
+                        updated_at=datetime.fromisoformat(row[7]) if row[7] else None
+                    ))
+                
+                return documents
+        except Exception as e:
+            logger.error(f"Error getting security documents by repo: {e}")
+            return []
+    
+    def save_pr_analysis(self, pr_analysis: PRAnalysis) -> bool:
+        """Save PR analysis to database"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("""
+                    INSERT OR REPLACE INTO pr_analyses 
+                    (id, pr_id, repo_id, pr_url, changed_files, security_issues, 
+                     recommendations, risk_level, has_repo_context, context_used, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    pr_analysis.id,
+                    pr_analysis.pr_id,
+                    pr_analysis.repo_id,
+                    pr_analysis.pr_url,
+                    json.dumps(pr_analysis.changed_files),
+                    json.dumps(pr_analysis.security_issues),
+                    json.dumps(pr_analysis.recommendations),
+                    pr_analysis.risk_level,
+                    pr_analysis.has_repo_context,
+                    json.dumps(pr_analysis.context_used),
+                    pr_analysis.created_at.isoformat()
+                ))
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error saving PR analysis: {e}")
+            return False
+    
+    def get_pr_analysis(self, pr_id: str) -> Optional[PRAnalysis]:
+        """Get PR analysis by PR ID"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute("""
+                    SELECT id, pr_id, repo_id, pr_url, changed_files, security_issues,
+                           recommendations, risk_level, has_repo_context, context_used, created_at
+                    FROM pr_analyses 
+                    WHERE pr_id = ?
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """, (pr_id,))
+                
+                row = cursor.fetchone()
+                if not row:
+                    return None
+                
+                return PRAnalysis(
+                    id=row[0],
+                    pr_id=row[1],
+                    repo_id=row[2],
+                    pr_url=row[3],
+                    changed_files=json.loads(row[4]) if row[4] else [],
+                    security_issues=json.loads(row[5]) if row[5] else [],
+                    recommendations=json.loads(row[6]) if row[6] else [],
+                    risk_level=row[7],
+                    has_repo_context=bool(row[8]),
+                    context_used=json.loads(row[9]) if row[9] else {},
+                    created_at=datetime.fromisoformat(row[10])
+                )
+        except Exception as e:
+            logger.error(f"Error getting PR analysis: {e}")
+            return None
+    
+    def get_pr_analyses_by_repo(self, repo_id: str) -> List[PRAnalysis]:
+        """Get all PR analyses for a repository"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute("""
+                    SELECT id, pr_id, repo_id, pr_url, changed_files, security_issues,
+                           recommendations, risk_level, has_repo_context, context_used, created_at
+                    FROM pr_analyses 
+                    WHERE repo_id = ?
+                    ORDER BY created_at DESC
+                """, (repo_id,))
+                
+                analyses = []
+                for row in cursor:
+                    analyses.append(PRAnalysis(
+                        id=row[0],
+                        pr_id=row[1],
+                        repo_id=row[2],
+                        pr_url=row[3],
+                        changed_files=json.loads(row[4]) if row[4] else [],
+                        security_issues=json.loads(row[5]) if row[5] else [],
+                        recommendations=json.loads(row[6]) if row[6] else [],
+                        risk_level=row[7],
+                        has_repo_context=bool(row[8]),
+                        context_used=json.loads(row[9]) if row[9] else {},
+                        created_at=datetime.fromisoformat(row[10])
+                    ))
+                
+                return analyses
+        except Exception as e:
+            logger.error(f"Error getting PR analyses by repo: {e}")
+            return []
+    
     def close(self):
         """Close database connections (placeholder for cleanup)"""
         # SQLite connections are closed automatically with context managers
@@ -749,6 +1050,73 @@ class DatabaseManager:
                 return True
         except Exception as e:
             print(f"Error saving threat document: {e}")
+            return False
+    
+    def save_security_document(self, security_doc: SecurityDocument) -> bool:
+        """Save security document to database with versioning support"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                # Check if document already exists
+                cursor = conn.execute("""
+                    SELECT version FROM security_documents 
+                    WHERE id = ? AND is_current = TRUE
+                """, (security_doc.id,))
+                
+                existing_version = cursor.fetchone()
+                version = 1 if not existing_version else existing_version[0] + 1
+                
+                # If updating existing document, mark old version as not current
+                if existing_version:
+                    conn.execute("""
+                        UPDATE security_documents 
+                        SET is_current = FALSE 
+                        WHERE id = ? AND is_current = TRUE
+                    """, (security_doc.id,))
+                
+                # Insert new version
+                conn.execute("""
+                    INSERT INTO security_documents
+                    (id, repo_id, title, content, scope, metadata, version, 
+                     is_current, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    security_doc.id,
+                    security_doc.repo_id,
+                    security_doc.title,
+                    security_doc.content,
+                    security_doc.scope,
+                    json.dumps(security_doc.metadata),
+                    version,
+                    True,
+                    security_doc.created_at.isoformat(),
+                    (security_doc.updated_at or datetime.now()).isoformat()
+                ))
+                
+                # Delete old code references for this document
+                conn.execute("DELETE FROM code_references WHERE doc_id = ?", (security_doc.id,))
+                
+                # Save new code references
+                for ref in security_doc.code_references:
+                    conn.execute("""
+                        INSERT INTO code_references
+                        (id, doc_id, file_path, line_start, line_end, 
+                         function_name, class_name, code_snippet)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        ref.id,
+                        security_doc.id,
+                        ref.file_path,
+                        ref.line_start,
+                        ref.line_end,
+                        ref.function_name,
+                        ref.class_name,
+                        ref.code_snippet
+                    ))
+                
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error saving security document: {e}")
             return False
     
     def get_threat_docs_by_repo(self, repo_id: str, include_all_versions: bool = False) -> List[ThreatDoc]:
@@ -1042,7 +1410,301 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error cleaning up old versions: {e}")
             return False
+    
+    def save_security_document(self, security_doc: SecurityDocument) -> bool:
+        """Save security document to database with versioning support"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                # Check if document already exists
+                cursor = conn.execute("""
+                    SELECT version FROM security_documents 
+                    WHERE id = ? AND is_current = TRUE
+                """, (security_doc.id,))
+                
+                existing_version = cursor.fetchone()
+                version = 1 if not existing_version else existing_version[0] + 1
+                
+                # If updating existing document, mark old version as not current
+                if existing_version:
+                    conn.execute("""
+                        UPDATE security_documents 
+                        SET is_current = FALSE 
+                        WHERE id = ? AND is_current = TRUE
+                    """, (security_doc.id,))
+                
+                # Insert new version
+                conn.execute("""
+                    INSERT INTO security_documents
+                    (id, repo_id, title, content, scope, metadata, version, 
+                     is_current, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    security_doc.id,
+                    security_doc.repo_id,
+                    security_doc.title,
+                    security_doc.content,
+                    security_doc.scope,
+                    json.dumps(security_doc.metadata),
+                    version,
+                    True,
+                    security_doc.created_at.isoformat(),
+                    security_doc.updated_at.isoformat() if security_doc.updated_at else None
+                ))
+                
+                # Save code references
+                for ref in security_doc.code_references:
+                    conn.execute("""
+                        INSERT OR REPLACE INTO code_references
+                        (id, doc_id, file_path, line_start, line_end, 
+                         function_name, class_name, code_snippet)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        ref.id, security_doc.id, ref.file_path,
+                        ref.line_start, ref.line_end, ref.function_name,
+                        ref.class_name, ref.code_snippet
+                    ))
+                
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Error saving security document: {e}")
+            return False
+    
+    def get_security_document(self, doc_id: str) -> Optional[SecurityDocument]:
+        """Get security document by ID"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute("""
+                    SELECT id, repo_id, title, content, scope, metadata, created_at, updated_at
+                    FROM security_documents 
+                    WHERE id = ? AND is_current = TRUE
+                """, (doc_id,))
+                
+                row = cursor.fetchone()
+                if row:
+                    # Get code references
+                    ref_cursor = conn.execute("""
+                        SELECT id, file_path, line_start, line_end, 
+                               function_name, class_name, code_snippet
+                        FROM code_references WHERE doc_id = ?
+                    """, (doc_id,))
+                    
+                    code_refs = []
+                    for ref_row in ref_cursor.fetchall():
+                        code_refs.append(CodeReference(
+                            id=ref_row[0],
+                            file_path=ref_row[1],
+                            line_start=ref_row[2],
+                            line_end=ref_row[3],
+                            function_name=ref_row[4],
+                            class_name=ref_row[5],
+                            code_snippet=ref_row[6]
+                        ))
+                    
+                    return SecurityDocument(
+                        id=row[0],
+                        repo_id=row[1],
+                        title=row[2],
+                        content=row[3],
+                        scope=row[4],
+                        metadata=json.loads(row[5]) if row[5] else {},
+                        code_references=code_refs,
+                        created_at=datetime.fromisoformat(row[6]),
+                        updated_at=datetime.fromisoformat(row[7]) if row[7] else None
+                    )
+        except Exception as e:
+            print(f"Error getting security document: {e}")
+        return None
+    
+    def get_security_documents_by_repo(self, repo_id: str, scope: Optional[str] = None) -> List[SecurityDocument]:
+        """Get all security documents for a repository, optionally filtered by scope"""
+        documents = []
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                query = """
+                    SELECT id, repo_id, title, content, scope, metadata, created_at, updated_at
+                    FROM security_documents 
+                    WHERE repo_id = ? AND is_current = TRUE
+                """
+                params = [repo_id]
+                
+                if scope:
+                    query += " AND scope = ?"
+                    params.append(scope)
+                
+                query += " ORDER BY created_at DESC"
+                
+                cursor = conn.execute(query, params)
+                
+                for row in cursor.fetchall():
+                    # Get code references for each document
+                    ref_cursor = conn.execute("""
+                        SELECT id, file_path, line_start, line_end, 
+                               function_name, class_name, code_snippet
+                        FROM code_references WHERE doc_id = ?
+                    """, (row[0],))
+                    
+                    code_refs = []
+                    for ref_row in ref_cursor.fetchall():
+                        code_refs.append(CodeReference(
+                            id=ref_row[0],
+                            file_path=ref_row[1],
+                            line_start=ref_row[2],
+                            line_end=ref_row[3],
+                            function_name=ref_row[4],
+                            class_name=ref_row[5],
+                            code_snippet=ref_row[6]
+                        ))
+                    
+                    documents.append(SecurityDocument(
+                        id=row[0],
+                        repo_id=row[1],
+                        title=row[2],
+                        content=row[3],
+                        scope=row[4],
+                        metadata=json.loads(row[5]) if row[5] else {},
+                        code_references=code_refs,
+                        created_at=datetime.fromisoformat(row[6]),
+                        updated_at=datetime.fromisoformat(row[7]) if row[7] else None
+                    ))
+        except Exception as e:
+            print(f"Error getting security documents: {e}")
+        return documents
+    
+    def save_pr_analysis(self, pr_analysis: PRAnalysis) -> bool:
+        """Save PR analysis to database"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("""
+                    INSERT OR REPLACE INTO pr_analyses
+                    (id, pr_id, repo_id, pr_url, changed_files, security_issues, 
+                     recommendations, risk_level, has_repo_context, context_used, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    pr_analysis.id,
+                    pr_analysis.pr_id,
+                    pr_analysis.repo_id,
+                    pr_analysis.pr_url,
+                    json.dumps(pr_analysis.changed_files),
+                    json.dumps(pr_analysis.security_issues),
+                    json.dumps(pr_analysis.recommendations),
+                    pr_analysis.risk_level,
+                    pr_analysis.has_repo_context,
+                    json.dumps(pr_analysis.context_used),
+                    pr_analysis.created_at.isoformat()
+                ))
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Error saving PR analysis: {e}")
+            return False
+    
+    def get_pr_analysis(self, pr_id: str) -> Optional[PRAnalysis]:
+        """Get PR analysis by PR ID"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute("""
+                    SELECT id, pr_id, repo_id, pr_url, changed_files, security_issues,
+                           recommendations, risk_level, has_repo_context, context_used, created_at
+                    FROM pr_analyses WHERE pr_id = ?
+                    ORDER BY created_at DESC LIMIT 1
+                """, (pr_id,))
+                
+                row = cursor.fetchone()
+                if row:
+                    return PRAnalysis(
+                        id=row[0],
+                        pr_id=row[1],
+                        repo_id=row[2],
+                        pr_url=row[3],
+                        changed_files=json.loads(row[4]) if row[4] else [],
+                        security_issues=json.loads(row[5]) if row[5] else [],
+                        recommendations=json.loads(row[6]) if row[6] else [],
+                        risk_level=row[7],
+                        has_repo_context=bool(row[8]),
+                        context_used=json.loads(row[9]) if row[9] else {},
+                        created_at=datetime.fromisoformat(row[10])
+                    )
+        except Exception as e:
+            print(f"Error getting PR analysis: {e}")
+        return None
+    
+    def get_pr_analyses_by_repo(self, repo_id: str) -> List[PRAnalysis]:
+        """Get all PR analyses for a repository"""
+        analyses = []
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute("""
+                    SELECT id, pr_id, repo_id, pr_url, changed_files, security_issues,
+                           recommendations, risk_level, has_repo_context, context_used, created_at
+                    FROM pr_analyses WHERE repo_id = ?
+                    ORDER BY created_at DESC
+                """, (repo_id,))
+                
+                for row in cursor.fetchall():
+                    analyses.append(PRAnalysis(
+                        id=row[0],
+                        pr_id=row[1],
+                        repo_id=row[2],
+                        pr_url=row[3],
+                        changed_files=json.loads(row[4]) if row[4] else [],
+                        security_issues=json.loads(row[5]) if row[5] else [],
+                        recommendations=json.loads(row[6]) if row[6] else [],
+                        risk_level=row[7],
+                        has_repo_context=bool(row[8]),
+                        context_used=json.loads(row[9]) if row[9] else {},
+                        created_at=datetime.fromisoformat(row[10])
+                    ))
+        except Exception as e:
+            print(f"Error getting PR analyses: {e}")
+        return analyses
+    
+    def has_repo_analysis(self, repo_id: str) -> bool:
+        """Check if repository has existing security analysis (knowledge base)"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute("""
+                    SELECT COUNT(*) FROM security_documents 
+                    WHERE repo_id = ? AND scope = 'full_repo' AND is_current = TRUE
+                """, (repo_id,))
+                
+                count = cursor.fetchone()[0]
+                return count > 0
+        except Exception as e:
+            print(f"Error checking repo analysis: {e}")
+            return False
 
 
 # Global database manager instance
 db_manager = DatabaseManager()
+
+
+# Additional utility functions for backward compatibility
+def has_repo_analysis(repo_id: str) -> bool:
+    """Check if repository has existing security analysis (knowledge base)"""
+    return db_manager.has_repo_analysis(repo_id)
+
+
+def save_security_document(security_doc: SecurityDocument) -> bool:
+    """Save security document to database"""
+    return db_manager.save_security_document(security_doc)
+
+
+def get_security_document(doc_id: str) -> Optional[SecurityDocument]:
+    """Get security document by ID"""
+    return db_manager.get_security_document(doc_id)
+
+
+def get_security_documents_by_repo(repo_id: str) -> List[SecurityDocument]:
+    """Get all security documents for a repository"""
+    return db_manager.get_security_documents_by_repo(repo_id)
+
+
+def save_pr_analysis(pr_analysis: PRAnalysis) -> bool:
+    """Save PR analysis to database"""
+    return db_manager.save_pr_analysis(pr_analysis)
+
+
+def get_pr_analysis(pr_id: str) -> Optional[PRAnalysis]:
+    """Get PR analysis by PR ID"""
+    return db_manager.get_pr_analysis(pr_id)

@@ -31,11 +31,7 @@ class FlowType(str, Enum):
     USER_REGISTRATION = "user_registration"
 
 
-class ThreatDocType(str, Enum):
-    SYSTEM_OVERVIEW = "system_overview"
-    COMPONENT_PROFILE = "component_profile"
-    FLOW_THREAT_MODEL = "flow_threat_model"
-    MITIGATION = "mitigation"
+# Removed rigid ThreatDocType enum - replaced with flexible SecurityDocument model
 
 
 class DataSensitivityLevel(str, Enum):
@@ -180,12 +176,41 @@ class CodeReference(BaseModel):
     code_snippet: Optional[str] = None
 
 
-class ThreatDoc(BaseModel):
-    """Threat modeling document"""
+class SecurityDocument(BaseModel):
+    """Flexible security documentation model - replaces rigid ThreatDoc"""
     id: str
     repo_id: str
     title: str
-    doc_type: ThreatDocType
+    content: str  # Comprehensive security analysis content
+    scope: str    # "full_repo" or "pr_only" 
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    code_references: List[CodeReference] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: Optional[datetime] = None
+
+
+class PRAnalysis(BaseModel):
+    """PR-specific security analysis model"""
+    id: str
+    pr_id: str
+    repo_id: str
+    pr_url: str
+    changed_files: List[str] = Field(default_factory=list)
+    security_issues: List[Dict[str, Any]] = Field(default_factory=list)
+    recommendations: List[str] = Field(default_factory=list)
+    risk_level: str  # "low", "medium", "high", "critical"
+    has_repo_context: bool = False  # Whether full repo analysis was available
+    context_used: Dict[str, Any] = Field(default_factory=dict)  # What repo context was used
+    created_at: datetime = Field(default_factory=datetime.now)
+
+
+# Legacy ThreatDoc model - kept for backward compatibility during migration
+class ThreatDoc(BaseModel):
+    """Legacy threat modeling document - use SecurityDocument for new implementations"""
+    id: str
+    repo_id: str
+    title: str
+    doc_type: str  # Changed from ThreatDocType enum to string for flexibility
     content: str
     metadata: Dict[str, Any] = Field(default_factory=dict)
     code_references: List[CodeReference] = Field(default_factory=list)
@@ -211,7 +236,7 @@ class SearchResult(BaseModel):
     title: str
     content_snippet: str
     relevance_score: float
-    doc_type: ThreatDocType
+    doc_type: str  # Changed from ThreatDocType enum to string for flexibility
     code_references: List[CodeReference] = Field(default_factory=list)
 
 

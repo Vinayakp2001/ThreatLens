@@ -21,7 +21,7 @@ import uvicorn
 
 from api.config import settings
 from api.models import (
-    ThreatDoc, SecurityModel, ThreatDocType, SearchResult,
+    ThreatDoc, SecurityDocument, SecurityModel, ThreatDocType, SearchResult,
     RepoContext, StructureAnalysis
 )
 from api.database import DatabaseManager
@@ -33,6 +33,9 @@ from api.repo_ingest import (
 from api.resource_manager import initialize_resource_manager, get_resource_manager
 from api.security_model import SecurityModelBuilder
 from api.threat_docs import ThreatDocGenerator
+from api.security_wiki_generator import SecurityWikiGenerator
+from api.knowledge_base import RepositoryKnowledgeBase
+from api.pr_analyzer import PRChangeDetector
 from api.rag import RAGSystem
 from api.partial_results import PartialResultsManager, AnalysisStage, AnalysisStatus
 from api.concurrency import lock_manager, analysis_queue, LockAcquisitionError, LockTimeoutError
@@ -81,6 +84,44 @@ class AnalyzeRepoResponse(BaseModel):
     message: str = Field(description="Status message")
     estimated_completion_time: Optional[str] = None
 
+class AnalyzePRRequest(BaseModel):
+    """Request model for PR security analysis"""
+    pr_url: str = Field(description="GitHub PR URL (e.g., https://github.com/user/repo/pull/123)")
+    repo_id: Optional[str] = Field(None, description="Repository ID if known (for context lookup)")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "pr_url": "https://github.com/user/repo/pull/123",
+                "repo_id": "optional-repo-id-for-context"
+            }
+        }
+
+class AnalyzePRResponse(BaseModel):
+    """Response model for PR security analysis"""
+    analysis_id: str = Field(description="Unique analysis identifier")
+    pr_id: str = Field(description="PR identifier")
+    repo_id: str = Field(description="Repository identifier")
+    status: str = Field(description="Analysis status")
+    message: str = Field(description="Status message")
+    has_repo_context: bool = Field(description="Whether repository context was available")
+    security_doc_id: Optional[str] = Field(None, description="Generated security document ID")
+    risk_level: Optional[str] = Field(None, description="Overall risk level assessment")
+    guidance: Optional[Dict[str, Any]] = Field(None, description="User guidance information")
+    context_status: Optional[Dict[str, Any]] = Field(None, description="Repository context status")
+    routing_info: Optional[Dict[str, Any]] = Field(None, description="Analysis routing information")
+
+class RepoStatusResponse(BaseModel):
+    """Response model for repository status check"""
+    repo_id: str = Field(description="Repository identifier")
+    exists: bool = Field(description="Whether repository analysis exists")
+    status: str = Field(description="Analysis status")
+    message: str = Field(description="Status message")
+    analysis_date: Optional[str] = Field(None, description="Date of last analysis")
+    document_count: int = Field(description="Number of security documents")
+    has_search_index: bool = Field(description="Whether search index is available")
+    repo_context: Optional[Dict[str, Any]] = Field(None, description="Repository context information")
+
 class DocumentListResponse(BaseModel):
     """Response model for document listing"""
     repo_id: str
@@ -115,6 +156,9 @@ db_manager: Optional[DatabaseManager] = None
 repo_ingestor: Optional[RepoIngestor] = None
 security_model_builder: Optional[SecurityModelBuilder] = None
 threat_doc_generator: Optional[ThreatDocGenerator] = None
+security_wiki_generator: Optional[SecurityWikiGenerator] = None
+knowledge_base_manager: Optional[RepositoryKnowledgeBase] = None
+pr_analyzer: Optional[PRChangeDetector] = None
 rag_system: Optional[RAGSystem] = None
 partial_results_manager: Optional[PartialResultsManager] = None
 
@@ -140,6 +184,9 @@ async def lifespan(app: FastAPI):
         repo_ingestor = RepoIngestor(settings)
         security_model_builder = SecurityModelBuilder()
         threat_doc_generator = ThreatDocGenerator(settings)
+        security_wiki_generator = SecurityWikiGenerator(settings)
+        knowledge_base_manager = RepositoryKnowledgeBase()
+        pr_analyzer = PRChangeDetector()
         rag_system = RAGSystem(settings)
         partial_results_manager = PartialResultsManager()
         
@@ -463,6 +510,34 @@ def get_threat_doc_generator() -> ThreatDocGenerator:
         raise HTTPException(status_code=503, detail="Threat document generator not initialized")
     return threat_doc_generator
 
+def get_security_wiki_generator() -> SecurityWikiGenerator:
+    """Get security wiki generator dependency"""
+    if security_wiki_generator is None:
+        raise HTTPException(status_code=503, detail="Security wiki generator not initialized")
+    return security_wiki_generator
+
+def get_knowledge_base_manager() -> RepositoryKnowledgeBase:
+    """Get knowledge base manager dependency"""
+    if knowledge_base_manager is None:
+        raise HTTPException(status_code=503, detail="Knowledge base manager not initialized")
+    return knowledge_base_manager
+
+def get_pr_analyzer() -> PRChangeDetector:
+    """Get PR analyzer dependency"""
+    if pr_analyzer is None:
+        raise HTTPException(status_code=503, detail="PR analyzer not initialized")
+    return pr_analyzer
+
+def get_smart_workflow_manager():
+    """Get smart workflow manager dependency"""
+    from api.smart_workflow import SmartWorkflowManager
+    return SmartWorkflowManager()
+
+def get_analysis_router():
+    """Get analysis router dependency"""
+    from api.analysis_router import AnalysisRouter
+    return AnalysisRouter()
+
 def get_rag_system() -> RAGSystem:
     """Get RAG system dependency"""
     if rag_system is None:
@@ -476,6 +551,56 @@ def get_partial_results_manager() -> PartialResultsManager:
     return partial_results_manager
 
 # Health check endpoint
+@app.get("/github_status", tags=["Health"])
+async def github_api_status() -> Dict[str, Any]:
+    """
+    Check GitHub API status and rate limits
+    
+    Returns information about GitHub API connectivity, authentication status,
+    and current rate limits. Useful for monitoring and debugging PR analysis issues.
+    """
+    try:
+        from api.pr_analyzer import GitHubAPIClient
+        
+        github_client = GitHubAPIClient()
+        
+        # Get rate limit status
+        rate_limit_info = github_client.get_rate_limit_status()
+        
+        # Check if we have authentication
+        has_token = settings.github_token is not None
+        
+        # Test basic API access
+        test_repo_access = github_client.check_repository_access("octocat", "Hello-World")
+        
+        return {
+            "github_api_status": "available" if test_repo_access["accessible"] else "limited",
+            "authentication": {
+                "has_token": has_token,
+                "token_configured": has_token,
+                "rate_limit_type": "authenticated" if has_token else "unauthenticated"
+            },
+            "rate_limits": rate_limit_info,
+            "configuration": {
+                "base_url": settings.github_api_base_url,
+                "timeout_seconds": settings.github_timeout_seconds,
+                "retry_attempts": settings.github_retry_attempts,
+                "requests_per_hour_limit": settings.github_requests_per_hour,
+                "requests_per_minute_limit": settings.github_requests_per_minute
+            },
+            "test_access": test_repo_access,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error checking GitHub API status: {e}")
+        return {
+            "github_api_status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
 @app.get("/health", response_model=HealthResponse, tags=["Health"])
 async def health_check(db: DatabaseManager = Depends(get_db_manager)) -> HealthResponse:
     """
@@ -628,6 +753,117 @@ async def validate_repository(
             "details": e.details if settings.debug else None
         }
 
+@app.post("/intelligent_analysis", tags=["Repository Analysis"])
+async def intelligent_analysis_routing(
+    request: Dict[str, Any],
+    db: DatabaseManager = Depends(get_db_manager),
+    wiki_generator: SecurityWikiGenerator = Depends(get_security_wiki_generator),
+    analysis_router: AnalysisRouter = Depends(get_analysis_router)
+) -> Dict[str, Any]:
+    """
+    Intelligent analysis routing endpoint that automatically determines the best analysis approach
+    
+    This endpoint accepts various types of analysis requests and intelligently routes them
+    to the appropriate analysis mode based on the input type, repository context availability,
+    and complexity. Supports both repository and PR analysis with automatic fallback handling.
+    
+    Request format:
+    {
+        "url": "https://github.com/user/repo" or "https://github.com/user/repo/pull/123",
+        "analysis_type": "auto" | "repository" | "pr" (optional),
+        "force_mode": "full_repository" | "context_aware_pr" | "pr_analysis" | "fallback_pr" (optional),
+        "options": {
+            "enable_fallback": true,
+            "max_duration": "20m",
+            "priority": "normal" | "high"
+        }
+    }
+    """
+    try:
+        logger.info(f"Intelligent analysis routing request: {request}")
+        
+        # Route the analysis request
+        routing_result = analysis_router.route_analysis_request(request)
+        
+        if "error" in routing_result:
+            raise HTTPException(
+                status_code=400,
+                detail=routing_result["error"]
+            )
+        
+        # Execute the routed analysis
+        execution_result = analysis_router.execute_routed_analysis(
+            routing_result, wiki_generator, db
+        )
+        
+        # Combine routing and execution results
+        response = {
+            "routing": routing_result,
+            "execution": execution_result,
+            "intelligent_routing": True,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Intelligent analysis routing failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Intelligent analysis routing failed: {str(e)}"
+        )
+
+
+@app.get("/routing_stats", tags=["Repository Analysis"])
+async def get_routing_statistics(
+    analysis_router: AnalysisRouter = Depends(get_analysis_router)
+) -> Dict[str, Any]:
+    """
+    Get intelligent routing statistics and configuration
+    
+    Returns information about the routing system including cache statistics,
+    supported analysis types, and routing strategies.
+    """
+    try:
+        stats = analysis_router.get_routing_stats()
+        return {
+            "routing_stats": stats,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting routing stats: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get routing statistics: {str(e)}"
+        )
+
+
+@app.post("/clear_routing_cache", tags=["Repository Analysis"])
+async def clear_routing_cache(
+    analysis_router: AnalysisRouter = Depends(get_analysis_router)
+) -> Dict[str, Any]:
+    """
+    Clear the intelligent routing cache
+    
+    Clears cached routing decisions to force fresh analysis of routing requirements.
+    Useful for testing or when routing logic has been updated.
+    """
+    try:
+        analysis_router.clear_routing_cache()
+        return {
+            "message": "Routing cache cleared successfully",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error clearing routing cache: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to clear routing cache: {str(e)}"
+        )
+
+
 @app.post("/analyze_repo", response_model=AnalyzeRepoResponse, tags=["Repository Analysis"])
 async def analyze_repository(
     request: AnalyzeRepoRequest,
@@ -635,6 +871,8 @@ async def analyze_repository(
     ingestor: RepoIngestor = Depends(get_repo_ingestor),
     security_builder: SecurityModelBuilder = Depends(get_security_model_builder),
     doc_generator: ThreatDocGenerator = Depends(get_threat_doc_generator),
+    wiki_generator: SecurityWikiGenerator = Depends(get_security_wiki_generator),
+    kb_manager: RepositoryKnowledgeBase = Depends(get_knowledge_base_manager),
     rag: RAGSystem = Depends(get_rag_system),
     partial_manager: PartialResultsManager = Depends(get_partial_results_manager)
 ) -> AnalyzeRepoResponse:
@@ -718,7 +956,7 @@ async def analyze_repository(
             await _execute_stage_with_recovery(
                 partial_manager, analysis_id, AnalysisStage.DOCUMENT_GENERATION,
                 _stage_document_generation,
-                partial_manager, analysis_id, doc_generator, db
+                partial_manager, analysis_id, doc_generator, wiki_generator, kb_manager, db
             )
             
             # Stage 5: RAG Indexing
@@ -873,53 +1111,73 @@ async def _stage_security_model_building(partial_manager, analysis_id, security_
     }
 
 
-async def _stage_document_generation(partial_manager, analysis_id, doc_generator, db):
-    """Document generation stage"""
+async def _stage_document_generation(partial_manager, analysis_id, doc_generator, wiki_generator, kb_manager, db):
+    """Document generation stage - now uses flexible SecurityWikiGenerator and creates knowledge base"""
     stage_data = partial_manager.get_partial_results(analysis_id, AnalysisStage.SECURITY_MODEL_BUILDING)
     repo_context = RepoContext(**stage_data["repo_context"])
     security_model = SecurityModel(**stage_data["security_model"])
     
-    logger.info(f"Generating threat documents for repo: {repo_context.repo_id}")
+    logger.info(f"Generating comprehensive security documentation for repo: {repo_context.repo_id}")
     
     # Update status
     repo_context.analysis_status = "generating_documents"
     
     generated_docs = []
+    security_documents = []
     
     try:
-        # Generate system overview
-        system_overview = await doc_generator.generate_system_overview(security_model)
-        db.save_threat_doc(system_overview)
-        generated_docs.append(system_overview.dict())
+        # Generate comprehensive security documentation using new SecurityWikiGenerator
+        security_doc = await wiki_generator.generate_comprehensive_security_documentation(
+            security_model, scope="full_repo"
+        )
         
-        # Generate component profiles
-        component_profiles = await doc_generator.generate_component_profiles(security_model)
-        for profile in component_profiles:
-            db.save_threat_doc(profile)
-            generated_docs.append(profile.dict())
+        # Save the new security document
+        db.save_security_document(security_doc)
+        generated_docs.append(security_doc.dict())
+        security_documents.append(security_doc)
         
-        # Generate flow threat models
-        flow_threat_models = await doc_generator.generate_flow_threat_models(security_model)
-        for flow_model in flow_threat_models:
-            db.save_threat_doc(flow_model)
-            generated_docs.append(flow_model.dict())
+        logger.info(f"Generated comprehensive security documentation: {security_doc.id}")
         
-        # Generate mitigations document
-        all_existing_docs = [system_overview] + component_profiles + flow_threat_models
-        mitigations_doc = await doc_generator.generate_mitigations(security_model, all_existing_docs)
-        db.save_threat_doc(mitigations_doc)
-        generated_docs.append(mitigations_doc.dict())
+        # Also generate legacy threat documents for backward compatibility
+        # This ensures existing functionality continues to work
+        try:
+            legacy_docs = await doc_generator.generate_all_documents(security_model)
+            for legacy_doc in legacy_docs:
+                db.save_threat_doc(legacy_doc)
+                generated_docs.append(legacy_doc.dict())
+            
+            logger.info(f"Generated {len(legacy_docs)} legacy threat documents for compatibility")
+        except Exception as e:
+            logger.warning(f"Failed to generate legacy documents (non-critical): {e}")
+        
+        # Create and store knowledge base for future PR analysis
+        logger.info(f"Creating knowledge base for repo: {repo_context.repo_id}")
+        kb_success = kb_manager.store_security_knowledge(repo_context.repo_id, security_documents)
+        
+        if kb_success:
+            logger.info(f"Successfully created knowledge base for repo: {repo_context.repo_id}")
+        else:
+            logger.warning(f"Failed to create knowledge base for repo: {repo_context.repo_id}")
+        
+        # Store results
+        partial_manager.store_partial_results(
+            analysis_id, 
+            AnalysisStage.DOCUMENT_GENERATION,
+            {
+                "repo_context": repo_context.dict(),
+                "security_model": security_model.dict(),
+                "generated_documents": generated_docs,
+                "primary_security_doc_id": security_doc.id,
+                "document_count": len(generated_docs),
+                "knowledge_base_created": kb_success
+            }
+        )
+        
+        logger.info(f"Document generation completed for repo: {repo_context.repo_id}")
         
     except Exception as e:
-        # If document generation partially fails, save what we have
-        logger.warning(f"Partial document generation failure: {e}")
-        if generated_docs:
-            logger.info(f"Saved {len(generated_docs)} documents before failure")
-    
-    return {
-        "repo_context": repo_context.dict(),
-        "generated_documents": generated_docs
-    }
+        logger.error(f"Document generation failed for repo {repo_context.repo_id}: {e}")
+        raise
 
 
 async def _stage_rag_indexing(partial_manager, analysis_id, rag, db):
@@ -949,6 +1207,369 @@ async def _stage_rag_indexing(partial_manager, analysis_id, rag, db):
         "indexed_documents": len(all_docs),
         "indexed_code_references": len(code_references) if 'code_references' in locals() else 0
     }
+
+
+@app.post("/analyze_pr", response_model=AnalyzePRResponse, tags=["Repository Analysis"])
+async def analyze_pull_request(
+    request: AnalyzePRRequest,
+    db: DatabaseManager = Depends(get_db_manager),
+    wiki_generator: SecurityWikiGenerator = Depends(get_security_wiki_generator),
+    analysis_router: AnalysisRouter = Depends(get_analysis_router)
+) -> AnalyzePRResponse:
+    """
+    Analyze a pull request for security implications with intelligent routing
+    
+    Uses intelligent analysis routing to determine the optimal analysis approach
+    based on repository context availability, PR complexity, and system state.
+    Automatically handles fallback scenarios when optimal analysis isn't possible.
+    """
+    # Generate unique IDs
+    analysis_id = str(uuid.uuid4())
+    pr_id = str(uuid.uuid4())
+    
+    logger.info(f"Starting intelligent PR analysis - Analysis ID: {analysis_id}, PR URL: {request.pr_url}")
+    
+    try:
+        # Prepare routing request
+        routing_request = {
+            "pr_url": request.pr_url,
+            "repo_id": request.repo_id,
+            "analysis_type": "pr",
+            "options": {
+                "enable_fallback": True,
+                "priority": "normal"
+            }
+        }
+        
+        # Route the analysis request
+        routing_result = analysis_router.route_analysis_request(routing_request)
+        
+        if "error" in routing_result:
+            raise HTTPException(
+                status_code=400,
+                detail=f"PR analysis routing failed: {routing_result['error']}"
+            )
+        
+        # Check if user guidance is required
+        user_guidance = routing_result.get("user_guidance", {})
+        if user_guidance.get("action_required"):
+            # Return guidance without executing analysis
+            return AnalyzePRResponse(
+                analysis_id=analysis_id,
+                pr_id=pr_id,
+                repo_id=routing_result["execution_plan"]["input"]["repo_id"],
+                status="guidance_required",
+                message="User guidance required before proceeding with analysis",
+                has_repo_context=False,
+                guidance=user_guidance,
+                context_status=routing_result.get("workflow_analysis", {}).get("context_status"),
+                routing_info=routing_result
+            )
+        
+        # Execute the routed analysis
+        execution_result = analysis_router.execute_routed_analysis(
+            routing_result, wiki_generator, db
+        )
+        
+        if "error" in execution_result:
+            raise HTTPException(
+                status_code=500,
+                detail=f"PR analysis execution failed: {execution_result['error']}"
+            )
+        
+        # Extract results based on execution mode
+        execution_mode = execution_result.get("execution_mode")
+        analysis_result = execution_result.get("analysis_result", {})
+        
+        # Determine repository ID and context status
+        repo_id = routing_result["execution_plan"]["input"]["repo_id"]
+        has_repo_context = execution_result.get("context_used", False)
+        
+        # Extract security information from analysis result
+        security_issues = []
+        recommendations = []
+        risk_level = "low"
+        
+        if execution_mode in ["context_aware_pr", "basic_pr"]:
+            # Extract from contextual or basic analysis
+            if "file_analysis" in analysis_result:
+                security_issues = [
+                    {
+                        "file": f['filename'],
+                        "risk_level": f['risk_level'],
+                        "categories": f['security_categories']
+                    }
+                    for f in analysis_result['file_analysis']['security_relevant_files']
+                ]
+            
+            if "contextual_recommendations" in analysis_result:
+                recommendations = analysis_result['contextual_recommendations']
+            elif "overall_assessment" in analysis_result:
+                recommendations = analysis_result['overall_assessment'].get('recommendations', [])
+            
+            if "contextual_assessment" in analysis_result:
+                risk_level = analysis_result["contextual_assessment"].get("contextual_risk_level", "low")
+            elif "overall_assessment" in analysis_result:
+                risk_level = analysis_result['overall_assessment'].get('overall_risk_level', 'low')
+                
+        elif execution_mode == "fallback_pr":
+            # Extract from fallback analysis
+            if "file_analysis" in analysis_result:
+                security_issues = [
+                    {
+                        "file": f['filename'],
+                        "risk_level": f.get('risk_level', 'low'),
+                        "categories": f.get('security_categories', [])
+                    }
+                    for f in analysis_result['file_analysis']['security_relevant_files']
+                ]
+            
+            if "overall_assessment" in analysis_result:
+                recommendations = analysis_result['overall_assessment'].get('recommendations', [])
+                risk_level = analysis_result['overall_assessment'].get('overall_risk_level', 'low')
+        
+        # Extract changed files
+        changed_files = []
+        if "file_analysis" in analysis_result:
+            changed_files = [f['filename'] for f in analysis_result['file_analysis']['security_relevant_files']]
+        
+        # Create security model and generate documentation
+        from api.models import SecurityModel, Component, ComponentType
+        
+        components = []
+        for file_info in analysis_result.get('file_analysis', {}).get('security_relevant_files', []):
+            component = Component(
+                id=str(uuid.uuid4()),
+                name=file_info['filename'].split('/')[-1],
+                type=ComponentType.SERVICE,
+                file_path=file_info['filename'],
+                handles_sensitive_data=file_info.get('risk_level') in ['high', 'critical'],
+                description=f"Component from PR analysis: {file_info.get('status', 'modified')}"
+            )
+            components.append(component)
+        
+        security_model = SecurityModel(repo_id=repo_id, components=components)
+        
+        # Generate security documentation
+        repo_context = None
+        if has_repo_context:
+            from api.knowledge_base import RepositoryKnowledgeBase
+            kb_manager = RepositoryKnowledgeBase()
+            repo_context = kb_manager.get_repo_security_context(repo_id)
+        
+        security_doc = await wiki_generator.generate_pr_security_analysis(
+            security_model=security_model,
+            changed_files=changed_files,
+            repo_context=repo_context
+        )
+        
+        # Save the security document
+        db.save_security_document(security_doc)
+        
+        # Create PR analysis record
+        from api.models import PRAnalysis
+        
+        pr_analysis_record = PRAnalysis(
+            id=analysis_id,
+            pr_id=pr_id,
+            repo_id=repo_id,
+            pr_url=request.pr_url,
+            changed_files=changed_files,
+            security_issues=security_issues,
+            recommendations=recommendations,
+            risk_level=risk_level,
+            has_repo_context=has_repo_context,
+            context_used={
+                "repo_context_available": has_repo_context,
+                "repo_id": repo_id if has_repo_context else None,
+                "analysis_mode": execution_mode,
+                "routing_strategy": routing_result.get("routing_strategy"),
+                "fallback_used": execution_result.get("fallback_used", False)
+            }
+        )
+        
+        # Save PR analysis to database
+        db.save_pr_analysis(pr_analysis_record)
+        
+        logger.info(f"PR analysis completed successfully - Analysis ID: {analysis_id}, Mode: {execution_mode}")
+        
+        return AnalyzePRResponse(
+            analysis_id=analysis_id,
+            pr_id=pr_id,
+            repo_id=repo_id,
+            status="completed",
+            message=f"PR security analysis completed using {execution_mode} mode",
+            has_repo_context=has_repo_context,
+            security_doc_id=security_doc.id,
+            risk_level=risk_level,
+            guidance=user_guidance if user_guidance.get("show_guidance") else None,
+            context_status=routing_result.get("workflow_analysis", {}).get("context_status"),
+            routing_info={
+                "execution_mode": execution_mode,
+                "routing_strategy": routing_result.get("routing_strategy"),
+                "fallback_used": execution_result.get("fallback_used", False),
+                "confidence": routing_result.get("confidence")
+            }
+        )
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        logger.error(f"PR analysis failed - Analysis ID: {analysis_id}, Error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"PR analysis failed: {str(e)}"
+        )
+
+
+@app.get("/repo_status/{repo_id}", response_model=RepoStatusResponse, tags=["Repository Analysis"])
+async def get_repository_status(
+    repo_id: str = Path(description="Repository identifier"),
+    kb_manager: RepositoryKnowledgeBase = Depends(get_knowledge_base_manager)
+) -> RepoStatusResponse:
+    """
+    Check if repository analysis exists and return status information
+    
+    This endpoint allows checking whether a repository has been analyzed
+    and is available for context-aware PR analysis. Returns analysis metadata
+    and last update timestamp.
+    """
+    try:
+        logger.info(f"Checking repository status for repo_id: {repo_id}")
+        
+        # Check repository analysis status using knowledge base manager
+        analysis_status = kb_manager.check_repo_analysis_exists(repo_id)
+        
+        return RepoStatusResponse(
+            repo_id=repo_id,
+            exists=analysis_status["exists"],
+            status=analysis_status["status"],
+            message=analysis_status["message"],
+            analysis_date=analysis_status.get("analysis_date"),
+            document_count=analysis_status.get("document_count", 0),
+            has_search_index=analysis_status.get("has_search_index", False),
+            repo_context=analysis_status.get("repo_context", {})
+        )
+        
+    except Exception as e:
+        logger.error(f"Error checking repository status for {repo_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to check repository status: {str(e)}"
+        )
+
+
+@app.post("/check_pr_context", tags=["Repository Analysis"])
+async def check_pr_context_requirements(
+    request: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Check context requirements for PR analysis and provide intelligent guidance
+    
+    Analyzes a PR URL to determine the best analysis approach, checks repository
+    context availability, and provides user guidance on whether to analyze the
+    full repository first or proceed with PR-only analysis.
+    """
+    from api.smart_workflow import SmartWorkflowManager
+    
+    try:
+        pr_url = request.get("pr_url")
+        repo_id = request.get("repo_id")
+        
+        if not pr_url:
+            raise HTTPException(
+                status_code=400,
+                detail="PR URL is required"
+            )
+        
+        logger.info(f"Checking PR context requirements for: {pr_url}")
+        
+        # Initialize smart workflow manager
+        workflow_manager = SmartWorkflowManager()
+        
+        # Check context requirements
+        context_requirements = workflow_manager.check_context_requirements(pr_url, repo_id)
+        
+        if "error" in context_requirements:
+            raise HTTPException(
+                status_code=400,
+                detail=context_requirements["error"]
+            )
+        
+        return context_requirements
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking PR context requirements: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to check context requirements: {str(e)}"
+        )
+
+
+@app.post("/route_pr_analysis", tags=["Repository Analysis"])
+async def route_pr_analysis_request(
+    request: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Route PR analysis request to appropriate analysis mode with intelligent guidance
+    
+    Determines the optimal analysis approach based on repository context availability,
+    PR complexity, and user preferences. Provides routing decision with alternatives
+    and user guidance.
+    """
+    from api.smart_workflow import SmartWorkflowManager
+    
+    try:
+        pr_url = request.get("pr_url")
+        repo_id = request.get("repo_id")
+        force_mode = request.get("force_mode")
+        
+        if not pr_url:
+            raise HTTPException(
+                status_code=400,
+                detail="PR URL is required"
+            )
+        
+        logger.info(f"Routing PR analysis request for: {pr_url}")
+        
+        # Initialize smart workflow manager
+        workflow_manager = SmartWorkflowManager()
+        
+        # Route analysis request
+        routing_result = workflow_manager.route_analysis_request(pr_url, repo_id, force_mode)
+        
+        if "error" in routing_result:
+            raise HTTPException(
+                status_code=400,
+                detail=routing_result["error"]
+            )
+        
+        return routing_result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error routing PR analysis request: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to route analysis request: {str(e)}"
+        )
+            analysis_date=analysis_status.get("analysis_date"),
+            document_count=analysis_status.get("document_count", 0),
+            has_search_index=analysis_status.get("has_search_index", False),
+            repo_context=analysis_status.get("repo_context")
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to check repository status for {repo_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to check repository status: {str(e)}"
+        )
+
 
 @app.get("/repos/{repo_id}/documents", response_model=DocumentListResponse, tags=["Repository Analysis"])
 async def get_repository_documents(

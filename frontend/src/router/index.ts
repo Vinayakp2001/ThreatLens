@@ -15,6 +15,11 @@ const router = createRouter({
       component: () => import('../views/Repository.vue'),
     },
     {
+      path: '/pr/:prId',
+      name: 'pr-analysis',
+      component: () => import('../views/PRAnalysis.vue'),
+    },
+    {
       path: '/about',
       name: 'about',
       component: () => import('../views/AboutView.vue'),

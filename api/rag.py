@@ -19,7 +19,7 @@ import openai
 from .config import settings
 from .models import (
     ThreatDoc, CodeReference, SearchResult, Embedding,
-    ThreatDocType, RepoContext
+    RepoContext
 )
 from .resource_manager import get_resource_manager, ResourceManager
 
@@ -917,7 +917,7 @@ class RAGSystem:
                     title=result['metadata'].get('doc_title', 'Unknown Document'),
                     content_snippet=self._truncate_content(result['metadata'].get('content', ''), 200),
                     relevance_score=result['relevance_score'],
-                    doc_type=ThreatDocType(result['metadata'].get('doc_type', 'system_overview')),
+                    doc_type=result['metadata'].get('doc_type', 'system_overview'),
                     code_references=[]
                 )
             else:  # code
@@ -936,7 +936,7 @@ class RAGSystem:
                     title=f"Code: {result['metadata'].get('function_name', 'Unknown Function')}",
                     content_snippet=self._truncate_content(result['metadata'].get('content', ''), 200),
                     relevance_score=result['relevance_score'],
-                    doc_type=ThreatDocType.COMPONENT_PROFILE,  # Default for code
+                    doc_type="component_profile",  # Default for code
                     code_references=[code_ref]
                 )
             
@@ -1230,24 +1230,24 @@ class AdvancedSearchEngine:
         # Sort by final score
         return sorted(results, key=lambda x: x.relevance_score, reverse=True)
     
-    def _get_doc_type_boost(self, doc_type: ThreatDocType, query: str) -> float:
+    def _get_doc_type_boost(self, doc_type: str, query: str) -> float:
         """Get relevance boost based on document type and query"""
         query_lower = query.lower()
         
         # Map query terms to preferred document types
         type_preferences = {
-            'system': ThreatDocType.SYSTEM_OVERVIEW,
-            'overview': ThreatDocType.SYSTEM_OVERVIEW,
-            'architecture': ThreatDocType.SYSTEM_OVERVIEW,
-            'component': ThreatDocType.COMPONENT_PROFILE,
-            'service': ThreatDocType.COMPONENT_PROFILE,
-            'endpoint': ThreatDocType.COMPONENT_PROFILE,
-            'flow': ThreatDocType.FLOW_THREAT_MODEL,
-            'process': ThreatDocType.FLOW_THREAT_MODEL,
-            'workflow': ThreatDocType.FLOW_THREAT_MODEL,
-            'mitigation': ThreatDocType.MITIGATION,
-            'recommendation': ThreatDocType.MITIGATION,
-            'solution': ThreatDocType.MITIGATION
+            'system': 'system_overview',
+            'overview': 'system_overview',
+            'architecture': 'system_overview',
+            'component': 'component_profile',
+            'service': 'component_profile',
+            'endpoint': 'component_profile',
+            'flow': 'flow_threat_model',
+            'process': 'flow_threat_model',
+            'workflow': 'flow_threat_model',
+            'mitigation': 'mitigation',
+            'recommendation': 'mitigation',
+            'solution': 'mitigation'
         }
         
         for term, preferred_type in type_preferences.items():

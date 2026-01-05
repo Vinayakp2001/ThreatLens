@@ -71,12 +71,12 @@ class DocumentStorageService:
     def get_documents_by_repo(
         self, 
         repo_id: str, 
-        doc_type: Optional[ThreatDocType] = None,
+        doc_type: Optional[str] = None,
         include_all_versions: bool = False
     ) -> List[ThreatDoc]:
         """Get documents for a repository, optionally filtered by type"""
         if doc_type:
-            return self.db_manager.get_documents_by_type(repo_id, doc_type.value)
+            return self.db_manager.get_documents_by_type(repo_id, doc_type)
         else:
             return self.db_manager.get_threat_docs_by_repo(repo_id, include_all_versions)
     
@@ -336,15 +336,15 @@ updated_at: {document.updated_at.isoformat() if document.updated_at else 'null'}
         
         # Export in logical order
         type_order = [
-            ThreatDocType.SYSTEM_OVERVIEW,
-            ThreatDocType.COMPONENT_PROFILE,
-            ThreatDocType.FLOW_THREAT_MODEL,
-            ThreatDocType.MITIGATION
+            "system_overview",
+            "component_profile", 
+            "flow_threat_model",
+            "mitigation"
         ]
         
         for doc_type in type_order:
             if doc_type in docs_by_type:
-                markdown_content += f"## {doc_type.value.replace('_', ' ').title()}\n\n"
+                markdown_content += f"## {doc_type.replace('_', ' ').title()}\n\n"
                 
                 for doc in docs_by_type[doc_type]:
                     markdown_content += f"### {doc.title}\n\n"

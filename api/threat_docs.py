@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 from .models import (
-    ThreatDoc, ThreatDocType, SecurityModel, Component, Flow,
+    ThreatDoc, SecurityModel, Component, Flow,
     CodeReference
 )
 from .llm_client import LLMManager, LLMError
@@ -33,7 +33,7 @@ class ThreatDocGenerator:
         
         try:
             prompt = self.prompt_templates.get_prompt_for_doc_type(
-                ThreatDocType.SYSTEM_OVERVIEW,
+                "system_overview",
                 security_model
             )
             
@@ -45,7 +45,7 @@ class ThreatDocGenerator:
             
             parsed_response = self.response_parser.parse_threat_document(
                 response.content,
-                ThreatDocType.SYSTEM_OVERVIEW
+                "system_overview"
             )
             
             # Extract code references from security model
@@ -55,7 +55,7 @@ class ThreatDocGenerator:
                 id=str(uuid.uuid4()),
                 repo_id=security_model.repo_id,
                 title=parsed_response["title"],
-                doc_type=ThreatDocType.SYSTEM_OVERVIEW,
+                doc_type="system_overview",
                 content=parsed_response["content"],
                 metadata={
                     **parsed_response["metadata"],
@@ -113,7 +113,7 @@ class ThreatDocGenerator:
         """Generate a single component profile"""
         try:
             prompt = self.prompt_templates.get_prompt_for_doc_type(
-                ThreatDocType.COMPONENT_PROFILE,
+                "component_profile",
                 security_model,
                 component=component
             )
@@ -126,7 +126,7 @@ class ThreatDocGenerator:
             
             parsed_response = self.response_parser.parse_threat_document(
                 response.content,
-                ThreatDocType.COMPONENT_PROFILE
+                "component_profile"
             )
             
             # Create code reference for the component
@@ -144,7 +144,7 @@ class ThreatDocGenerator:
                 id=str(uuid.uuid4()),
                 repo_id=security_model.repo_id,
                 title=f"{parsed_response['title']} - {component.name}",
-                doc_type=ThreatDocType.COMPONENT_PROFILE,
+                doc_type="component_profile",
                 content=parsed_response["content"],
                 metadata={
                     **parsed_response["metadata"],
@@ -203,7 +203,7 @@ class ThreatDocGenerator:
         """Generate a single flow threat model"""
         try:
             prompt = self.prompt_templates.get_prompt_for_doc_type(
-                ThreatDocType.FLOW_THREAT_MODEL,
+                "flow_threat_model",
                 security_model,
                 flow=flow
             )
@@ -217,7 +217,7 @@ class ThreatDocGenerator:
             
             parsed_response = self.response_parser.parse_threat_document(
                 response.content,
-                ThreatDocType.FLOW_THREAT_MODEL
+                "flow_threat_model"
             )
             
             # Extract code references from flow components
@@ -227,7 +227,7 @@ class ThreatDocGenerator:
                 id=str(uuid.uuid4()),
                 repo_id=security_model.repo_id,
                 title=f"{parsed_response['title']} - {flow.name}",
-                doc_type=ThreatDocType.FLOW_THREAT_MODEL,
+                doc_type="flow_threat_model",
                 content=parsed_response["content"],
                 metadata={
                     **parsed_response["metadata"],
@@ -262,7 +262,7 @@ class ThreatDocGenerator:
             identified_threats = self._extract_threats_from_documents(existing_docs)
             
             prompt = self.prompt_templates.get_prompt_for_doc_type(
-                ThreatDocType.MITIGATION,
+                "mitigation",
                 security_model,
                 identified_threats=identified_threats
             )
@@ -276,7 +276,7 @@ class ThreatDocGenerator:
             
             parsed_response = self.response_parser.parse_threat_document(
                 response.content,
-                ThreatDocType.MITIGATION
+                "mitigation"
             )
             
             # Aggregate code references from all components and flows
@@ -286,7 +286,7 @@ class ThreatDocGenerator:
                 id=str(uuid.uuid4()),
                 repo_id=security_model.repo_id,
                 title=parsed_response["title"],
-                doc_type=ThreatDocType.MITIGATION,
+                doc_type="mitigation",
                 content=parsed_response["content"],
                 metadata={
                     **parsed_response["metadata"],

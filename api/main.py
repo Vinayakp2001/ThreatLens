@@ -21,7 +21,7 @@ import uvicorn
 
 from api.config import settings
 from api.models import (
-    ThreatDoc, SecurityDocument, SecurityModel, ThreatDocType, SearchResult,
+    ThreatDoc, SecurityDocument, SecurityModel, SearchResult,
     RepoContext, StructureAnalysis
 )
 from api.database import DatabaseManager
@@ -41,6 +41,7 @@ from api.partial_results import PartialResultsManager, AnalysisStage, AnalysisSt
 from api.concurrency import lock_manager, analysis_queue, LockAcquisitionError, LockTimeoutError
 from api.storage_manager import storage_manager, StorageType, CleanupResult
 from api.config import config_manager, ConfigurationError
+from api.analysis_router import AnalysisRouter
 from api.monitoring import (
     metrics_collector, system_monitor, application_monitor, 
     health_checker, alert_manager
@@ -132,7 +133,7 @@ class SearchDocsRequest(BaseModel):
     """Request model for document search"""
     query: str = Field(description="Search query")
     repo_id: Optional[str] = Field(None, description="Filter by repository ID")
-    doc_types: Optional[List[ThreatDocType]] = Field(None, description="Filter by document types")
+    doc_types: Optional[List[str]] = Field(None, description="Filter by document types")
     limit: int = Field(default=10, ge=1, le=100, description="Maximum results to return")
     offset: int = Field(default=0, ge=0, description="Results offset for pagination")
 
@@ -1557,24 +1558,13 @@ async def route_pr_analysis_request(
             status_code=500,
             detail=f"Failed to route analysis request: {str(e)}"
         )
-            analysis_date=analysis_status.get("analysis_date"),
-            document_count=analysis_status.get("document_count", 0),
-            has_search_index=analysis_status.get("has_search_index", False),
-            repo_context=analysis_status.get("repo_context")
-        )
-        
-    except Exception as e:
-        logger.error(f"Failed to check repository status for {repo_id}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to check repository status: {str(e)}"
-        )
 
+# Document Management Endpoints
 
 @app.get("/repos/{repo_id}/documents", response_model=DocumentListResponse, tags=["Repository Analysis"])
 async def get_repository_documents(
     repo_id: str = Path(description="Repository identifier"),
-    doc_type: Optional[ThreatDocType] = Query(None, description="Filter by document type"),
+    doc_type: Optional[str] = Query(None, description="Filter by document type"),
     include_versions: bool = Query(False, description="Include all document versions"),
     db: DatabaseManager = Depends(get_db_manager)
 ) -> DocumentListResponse:
@@ -3101,7 +3091,7 @@ async def get_search_analytics(
 async def search_repository_documents(
     repo_id: str = Path(description="Repository identifier"),
     query: str = Query(description="Search query"),
-    doc_types: Optional[List[ThreatDocType]] = Query(None, description="Filter by document types"),
+    doc_types: Optional[List[str]] = Query(None, description="Filter by document types"),
     limit: int = Query(default=10, ge=1, le=100, description="Maximum results to return"),
     offset: int = Query(default=0, ge=0, description="Results offset for pagination"),
     include_code: bool = Query(default=True, description="Include code snippets in search"),

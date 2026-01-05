@@ -2,7 +2,7 @@
 Prompt templates for threat modeling document generation aligned with OWASP standards
 """
 from typing import Dict, Any, List
-from .models import SecurityModel, Component, Flow, ThreatDocType
+from .models import SecurityModel, Component, Flow
 
 
 class PromptTemplates:
@@ -356,7 +356,7 @@ Format as actionable markdown with specific implementation guidance and priority
     
     @staticmethod
     def get_prompt_for_doc_type(
-        doc_type: ThreatDocType,
+        doc_type: str,
         security_model: SecurityModel,
         component: Component = None,
         flow: Flow = None,
@@ -364,20 +364,20 @@ Format as actionable markdown with specific implementation guidance and priority
     ) -> str:
         """Get the appropriate prompt based on document type"""
         
-        if doc_type == ThreatDocType.SYSTEM_OVERVIEW:
+        if doc_type == "system_overview":
             return PromptTemplates.system_overview_prompt(security_model)
         
-        elif doc_type == ThreatDocType.COMPONENT_PROFILE:
+        elif doc_type == "component_profile":
             if not component:
                 raise ValueError("Component required for component profile generation")
             return PromptTemplates.component_profile_prompt(component, security_model)
         
-        elif doc_type == ThreatDocType.FLOW_THREAT_MODEL:
+        elif doc_type == "flow_threat_model":
             if not flow:
                 raise ValueError("Flow required for flow threat model generation")
             return PromptTemplates.flow_threat_model_prompt(flow, security_model)
         
-        elif doc_type == ThreatDocType.MITIGATION:
+        elif doc_type == "mitigation":
             if not identified_threats:
                 identified_threats = []
             return PromptTemplates.mitigations_prompt(security_model, identified_threats)
@@ -390,7 +390,7 @@ class ResponseParser:
     """Parser for LLM responses with validation"""
     
     @staticmethod
-    def parse_threat_document(response_content: str, doc_type: ThreatDocType) -> Dict[str, Any]:
+    def parse_threat_document(response_content: str, doc_type: str) -> Dict[str, Any]:
         """Parse and validate LLM response for threat document"""
         
         # Basic validation - ensure we have content
@@ -408,19 +408,19 @@ class ResponseParser:
         if not title:
             # Generate default title based on doc type
             title_map = {
-                ThreatDocType.SYSTEM_OVERVIEW: "System Security Overview",
-                ThreatDocType.COMPONENT_PROFILE: "Component Security Profile",
-                ThreatDocType.FLOW_THREAT_MODEL: "Flow Threat Model",
-                ThreatDocType.MITIGATION: "Security Mitigations & Requirements"
+                "system_overview": "System Security Overview",
+                "component_profile": "Component Security Profile",
+                "flow_threat_model": "Flow Threat Model",
+                "mitigation": "Security Mitigations & Requirements"
             }
             title = title_map.get(doc_type, "Threat Modeling Document")
         
         # Validate content structure based on document type
         required_sections = {
-            ThreatDocType.SYSTEM_OVERVIEW: ["purpose", "architecture", "data", "security"],
-            ThreatDocType.COMPONENT_PROFILE: ["overview", "security", "threat", "recommendation"],
-            ThreatDocType.FLOW_THREAT_MODEL: ["flow", "stride", "threat", "mitigation"],
-            ThreatDocType.MITIGATION: ["requirement", "mitigation", "implementation"]
+            "system_overview": ["purpose", "architecture", "data", "security"],
+            "component_profile": ["overview", "security", "threat", "recommendation"],
+            "flow_threat_model": ["flow", "stride", "threat", "mitigation"],
+            "mitigation": ["requirement", "mitigation", "implementation"]
         }
         
         content_lower = response_content.lower()

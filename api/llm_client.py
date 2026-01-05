@@ -304,6 +304,25 @@ class LLMManager:
             return False
         except Exception:
             return False
+    
+    async def close(self):
+        """Close the LLM client and cleanup resources"""
+        try:
+            # For most providers, there's no explicit cleanup needed
+            # But we can log the shutdown for monitoring
+            logger.info(f"Closing LLM client: {self.provider}")
+            
+            # If the client has a close method, call it
+            if hasattr(self.client, 'close'):
+                if asyncio.iscoroutinefunction(self.client.close):
+                    await self.client.close()
+                else:
+                    self.client.close()
+                    
+        except Exception as e:
+            logger.warning(f"Error during LLM client cleanup: {e}")
+        finally:
+            self.client = None
 
 
 # Global LLM manager instance

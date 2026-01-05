@@ -199,6 +199,14 @@ debug_*.py
 migrate_*.py
 *.log
 
+# Testing and validation files (keep these)
+!test_system_validation.py
+!check_environment.py
+!TESTING_PLAN.md
+
+# Validation results
+validation_results.json
+
 # Backup and temporary directories
 *-backup/
 *-temp/

@@ -1,0 +1,353 @@
+# OWASP Cheat Sheets Index
+# Comprehensive catalog of OWASP cheat sheets used in ThreatLens
+# Organized by security domains with metadata for content retrieval and filtering
+
+version: "1.0"
+last_updated: "2026-01-05"
+
+cheatsheets:
+  # Core Threat Modeling and Security Design
+  - id: threat-modeling
+    title: "Threat Modeling Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Threat_Modeling_Cheat_Sheet.html"
+    local_path: "threat-modeling.md"
+    tags: [threat-modeling, methodology, stride, four-questions]
+    categories: [design, analysis, methodology]
+    security_domains: [threat-modeling, security-architecture]
+    stride_categories: [spoofing, tampering, repudiation, information-disclosure, denial-of-service, elevation-of-privilege]
+    phases: [design, analysis, review]
+    priority: high
+    description: "Core methodology for systematic threat identification using STRIDE and four questions approach"
+
+  - id: secure-product-design
+    title: "Secure Product Design Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Secure_Product_Design_Cheat_Sheet.html"
+    local_path: "secure-product-design.md"
+    tags: [design, architecture, security-by-design, sdlc]
+    categories: [design, architecture, planning]
+    security_domains: [security-architecture, secure-design]
+    stride_categories: [spoofing, tampering, information-disclosure, elevation-of-privilege]
+    phases: [design, planning]
+    priority: high
+    description: "Guidelines for building security into product design from the ground up"
+
+  # Authentication and Access Control
+  - id: authentication
+    title: "Authentication Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html"
+    local_path: "authentication.md"
+    tags: [authentication, identity, credentials, multi-factor]
+    categories: [authentication, security-controls]
+    security_domains: [authentication, identity-management]
+    stride_categories: [spoofing, elevation-of-privilege]
+    phases: [design, implementation, review]
+    component_types: [web-application, api, mobile-app]
+    priority: high
+    description: "Comprehensive guidance on implementing secure authentication mechanisms"
+
+  - id: access-control
+    title: "Access Control Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Access_Control_Cheat_Sheet.html"
+    local_path: "access-control.md"
+    tags: [authorization, rbac, abac, permissions]
+    categories: [authorization, security-controls]
+    security_domains: [access-control, authorization]
+    stride_categories: [elevation-of-privilege, information-disclosure]
+    phases: [design, implementation, review]
+    component_types: [web-application, api, database]
+    priority: high
+    description: "Best practices for implementing robust access control mechanisms"
+
+  - id: session-management
+    title: "Session Management Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html"
+    local_path: "session-management.md"
+    tags: [sessions, cookies, tokens, state-management]
+    categories: [session-management, security-controls]
+    security_domains: [session-management, state-security]
+    stride_categories: [spoofing, tampering, information-disclosure]
+    phases: [design, implementation, review]
+    component_types: [web-application, api]
+    priority: high
+    description: "Secure session management practices and implementation guidelines"
+
+  # Input Validation and Injection Prevention
+  - id: input-validation
+    title: "Input Validation Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html"
+    local_path: "input-validation.md"
+    tags: [input-validation, sanitization, encoding, filtering]
+    categories: [input-validation, security-controls]
+    security_domains: [input-validation, data-security]
+    stride_categories: [tampering, information-disclosure, denial-of-service]
+    phases: [design, implementation, review]
+    component_types: [web-application, api, database]
+    priority: high
+    description: "Comprehensive input validation strategies to prevent injection attacks"
+
+  - id: injection-prevention
+    title: "Injection Prevention Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Injection_Prevention_Cheat_Sheet.html"
+    local_path: "injection-prevention.md"
+    tags: [injection, sql-injection, xss, command-injection]
+    categories: [injection-prevention, security-controls]
+    security_domains: [injection-prevention, data-security]
+    stride_categories: [tampering, information-disclosure, elevation-of-privilege]
+    phases: [design, implementation, review]
+    component_types: [web-application, api, database]
+    priority: critical
+    description: "Prevention techniques for SQL injection, XSS, and other injection attacks"
+
+  - id: sql-injection-prevention
+    title: "SQL Injection Prevention Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html"
+    local_path: "sql-injection-prevention.md"
+    tags: [sql-injection, database-security, parameterized-queries]
+    categories: [injection-prevention, database-security]
+    security_domains: [database-security, injection-prevention]
+    stride_categories: [tampering, information-disclosure, elevation-of-privilege]
+    phases: [design, implementation, review]
+    component_types: [database, api, web-application]
+    priority: critical
+    description: "Specific techniques for preventing SQL injection vulnerabilities"
+
+  - id: cross-site-scripting-prevention
+    title: "Cross Site Scripting Prevention Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+    local_path: "xss-prevention.md"
+    tags: [xss, cross-site-scripting, output-encoding, csp]
+    categories: [injection-prevention, web-security]
+    security_domains: [web-security, injection-prevention]
+    stride_categories: [tampering, information-disclosure]
+    phases: [design, implementation, review]
+    component_types: [web-application, frontend]
+    priority: critical
+    description: "Comprehensive XSS prevention techniques and output encoding strategies"
+
+  # Cryptography and Data Protection
+  - id: cryptographic-storage
+    title: "Cryptographic Storage Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html"
+    local_path: "cryptographic-storage.md"
+    tags: [cryptography, encryption, key-management, data-protection]
+    categories: [cryptography, data-protection]
+    security_domains: [cryptography, data-protection]
+    stride_categories: [information-disclosure, tampering]
+    phases: [design, implementation, review]
+    component_types: [database, storage, api]
+    priority: high
+    description: "Best practices for cryptographic storage and key management"
+
+  - id: transport-layer-protection
+    title: "Transport Layer Protection Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Protection_Cheat_Sheet.html"
+    local_path: "transport-layer-protection.md"
+    tags: [tls, ssl, https, transport-security]
+    categories: [transport-security, cryptography]
+    security_domains: [transport-security, cryptography]
+    stride_categories: [information-disclosure, tampering]
+    phases: [design, implementation, review]
+    component_types: [web-application, api, network]
+    priority: high
+    description: "Secure transport layer configuration and TLS best practices"
+
+  # Cloud Security
+  - id: secure-cloud-architecture
+    title: "Secure Cloud Architecture Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Secure_Cloud_Architecture_Cheat_Sheet.html"
+    local_path: "secure-cloud-architecture.md"
+    tags: [cloud-security, aws, azure, gcp, infrastructure]
+    categories: [cloud-security, architecture]
+    security_domains: [cloud-security, infrastructure-security]
+    stride_categories: [spoofing, tampering, information-disclosure, elevation-of-privilege]
+    phases: [design, implementation, review]
+    component_types: [cloud-service, infrastructure, container]
+    priority: high
+    description: "Security considerations for cloud architecture and deployment"
+
+  - id: docker-security
+    title: "Docker Security Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html"
+    local_path: "docker-security.md"
+    tags: [docker, containers, container-security, devops]
+    categories: [container-security, infrastructure]
+    security_domains: [container-security, infrastructure-security]
+    stride_categories: [elevation-of-privilege, information-disclosure, denial-of-service]
+    phases: [design, implementation, deployment]
+    component_types: [container, infrastructure]
+    priority: medium
+    description: "Security best practices for Docker containers and containerized applications"
+
+  # API Security
+  - id: rest-security
+    title: "REST Security Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html"
+    local_path: "rest-security.md"
+    tags: [api-security, rest, web-services, http]
+    categories: [api-security, web-security]
+    security_domains: [api-security, web-security]
+    stride_categories: [spoofing, tampering, information-disclosure, elevation-of-privilege]
+    phases: [design, implementation, review]
+    component_types: [api, web-service]
+    priority: high
+    description: "Security considerations for REST API design and implementation"
+
+  - id: graphql-cheat-sheet
+    title: "GraphQL Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/GraphQL_Cheat_Sheet.html"
+    local_path: "graphql-security.md"
+    tags: [graphql, api-security, query-security]
+    categories: [api-security, web-security]
+    security_domains: [api-security, query-security]
+    stride_categories: [information-disclosure, denial-of-service, elevation-of-privilege]
+    phases: [design, implementation, review]
+    component_types: [api, graphql-service]
+    priority: medium
+    description: "Security best practices for GraphQL API implementation"
+
+  # Logging and Monitoring
+  - id: logging
+    title: "Logging Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html"
+    local_path: "logging.md"
+    tags: [logging, monitoring, audit-trail, incident-response]
+    categories: [logging, monitoring, security-operations]
+    security_domains: [logging, monitoring, incident-response]
+    stride_categories: [repudiation, information-disclosure]
+    phases: [design, implementation, operations]
+    component_types: [web-application, api, database, infrastructure]
+    priority: medium
+    description: "Secure logging practices and audit trail implementation"
+
+  # Code Review and Testing
+  - id: secure-code-review
+    title: "Secure Code Review Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Secure_Code_Review_Cheat_Sheet.html"
+    local_path: "secure-code-review.md"
+    tags: [code-review, static-analysis, security-testing]
+    categories: [code-review, security-testing]
+    security_domains: [code-security, security-testing]
+    stride_categories: [spoofing, tampering, repudiation, information-disclosure, denial-of-service, elevation-of-privilege]
+    phases: [review, testing]
+    component_types: [web-application, api, mobile-app]
+    priority: medium
+    description: "Guidelines for conducting effective security-focused code reviews"
+
+  - id: web-service-security-testing
+    title: "Web Service Security Testing Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Web_Service_Security_Testing_Cheat_Sheet.html"
+    local_path: "web-service-security-testing.md"
+    tags: [security-testing, web-services, penetration-testing]
+    categories: [security-testing, web-security]
+    security_domains: [security-testing, web-security]
+    stride_categories: [spoofing, tampering, information-disclosure, elevation-of-privilege]
+    phases: [testing, validation]
+    component_types: [web-service, api]
+    priority: medium
+    description: "Security testing methodologies for web services and APIs"
+
+# Categorization for easy filtering
+categories:
+  design:
+    - threat-modeling
+    - secure-product-design
+    - secure-cloud-architecture
+  
+  security-controls:
+    - authentication
+    - access-control
+    - session-management
+    - input-validation
+    - injection-prevention
+    - cryptographic-storage
+    - transport-layer-protection
+  
+  web-security:
+    - cross-site-scripting-prevention
+    - rest-security
+    - graphql-cheat-sheet
+  
+  infrastructure:
+    - docker-security
+    - secure-cloud-architecture
+  
+  operations:
+    - logging
+    - secure-code-review
+    - web-service-security-testing
+
+# STRIDE category mappings
+stride_mappings:
+  spoofing:
+    - threat-modeling
+    - authentication
+    - secure-product-design
+    - rest-security
+    - secure-cloud-architecture
+  
+  tampering:
+    - input-validation
+    - injection-prevention
+    - sql-injection-prevention
+    - cross-site-scripting-prevention
+    - cryptographic-storage
+    - transport-layer-protection
+  
+  repudiation:
+    - logging
+    - secure-code-review
+  
+  information-disclosure:
+    - access-control
+    - session-management
+    - cryptographic-storage
+    - transport-layer-protection
+    - secure-cloud-architecture
+    - docker-security
+  
+  denial-of-service:
+    - input-validation
+    - docker-security
+    - graphql-cheat-sheet
+  
+  elevation-of-privilege:
+    - access-control
+    - injection-prevention
+    - sql-injection-prevention
+    - secure-cloud-architecture
+    - docker-security
+
+# Component type mappings
+component_mappings:
+  web-application:
+    - authentication
+    - access-control
+    - session-management
+    - input-validation
+    - injection-prevention
+    - cross-site-scripting-prevention
+    - secure-code-review
+  
+  api:
+    - authentication
+    - access-control
+    - input-validation
+    - injection-prevention
+    - rest-security
+    - graphql-cheat-sheet
+    - cryptographic-storage
+  
+  database:
+    - access-control
+    - input-validation
+    - sql-injection-prevention
+    - cryptographic-storage
+  
+  cloud-service:
+    - secure-cloud-architecture
+    - docker-security
+  
+  infrastructure:
+    - secure-cloud-architecture
+    - docker-security
+    - logging

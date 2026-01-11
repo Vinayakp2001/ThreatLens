@@ -192,6 +192,22 @@ models/
 .vscode/
 .idea/
 
+# Kiro specs and development artifacts (keep private for professional appearance)
+.kiro/specs/
+.kiro/settings/
+
+# Cleanup and backup directories
+cleanup_backups/
+*-backup/
+*-temp/
+backup/
+temp/
+
+# Test results and reports
+playwright-report/
+test-results/
+test_outputs/
+
 # Development test files
 test_*.py
 test_*.ps1
@@ -220,6 +236,10 @@ yarn-debug.log*
 yarn-error.log*
 .npm
 .yarn-integrity
+
+# Kiro development files (exclude from open source)
+.kiro/
+.kiro/**/*
 
 # Frontend build artifacts
 dist/

@@ -44,7 +44,7 @@
             </div>
             <div class="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
               <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                {{ threats.length }}
+                {{ effectiveThreats.length }}
               </div>
               <div class="text-sm text-gray-600 dark:text-gray-400">Total Threats</div>
             </div>
@@ -308,8 +308,18 @@ interface Threat {
   owasp_references: string[]
 }
 
+interface WikiSection {
+  id: string
+  title: string
+  content: string
+  security_findings: any[]
+  owasp_mappings: string[]
+  cross_references: string[]
+}
+
 interface Props {
-  threats: Threat[]
+  threats?: Threat[]
+  wikiSection?: WikiSection
   system?: any
   loading?: boolean
 }
@@ -319,6 +329,27 @@ const props = withDefaults(defineProps<Props>(), {
   loading: false
 })
 
+// Extract threats from wiki section if provided
+const effectiveThreats = computed(() => {
+  if (props.wikiSection?.security_findings) {
+    // Convert security findings to threat format for compatibility
+    return props.wikiSection.security_findings.map((finding: any) => ({
+      id: finding.id || `finding-${Math.random()}`,
+      title: finding.type || 'Security Finding',
+      description: finding.description || '',
+      stride_category: finding.stride_category || 'Unknown',
+      likelihood: 'Medium', // Default values
+      impact: 'Medium',
+      risk_score: finding.severity === 'high' ? 8 : finding.severity === 'medium' ? 5 : 2,
+      affected_assets: finding.affected_components || [],
+      attack_vectors: [],
+      mitigations: [],
+      owasp_references: props.wikiSection?.owasp_mappings || []
+    }))
+  }
+  return props.threats
+})
+
 // State
 const selectedStrideFilter = ref('')
 const selectedRiskFilter = ref('')
@@ -326,22 +357,22 @@ const sortBy = ref('risk_score')
 
 // Computed properties
 const highRiskThreats = computed(() => 
-  props.threats.filter(t => t.risk_score >= 7)
+  effectiveThreats.value.filter(t => t.risk_score >= 7)
 )
 
 const mediumRiskThreats = computed(() => 
-  props.threats.filter(t => t.risk_score >= 4 && t.risk_score < 7)
+  effectiveThreats.value.filter(t => t.risk_score >= 4 && t.risk_score < 7)
 )
 
 const lowRiskThreats = computed(() => 
-  props.threats.filter(t => t.risk_score < 4)
+  effectiveThreats.value.filter(t => t.risk_score < 4)
 )
 
 const strideDistribution = computed(() => {
   const distribution = {
     'S': 0, 'T': 0, 'R': 0, 'I': 0, 'D': 0, 'E': 0
   }
-  props.threats.forEach(threat => {
+  effectiveThreats.value.forEach(threat => {
     const category = threat.stride_category?.charAt(0)?.toUpperCase()
     if (category && category in distribution) {
       distribution[category as keyof typeof distribution]++
@@ -351,7 +382,7 @@ const strideDistribution = computed(() => {
 })
 
 const filteredAndSortedThreats = computed(() => {
-  let filtered = props.threats
+  let filtered = effectiveThreats.value
 
   // Apply STRIDE filter
   if (selectedStrideFilter.value) {

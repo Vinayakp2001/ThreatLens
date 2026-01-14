@@ -19,7 +19,7 @@ import openai
 from .config import settings
 from .models import (
     ThreatDoc, CodeReference, SearchResult, Embedding,
-    RepoContext
+    RepoContext, SecurityFinding, OWASPMapping, OWASPGuidance
 )
 from .resource_manager import get_resource_manager, ResourceManager
 
@@ -1340,8 +1340,13 @@ class AdvancedSearchEngine:
 class EnhancedRAGSystem(RAGSystem):
     """Enhanced RAG system with advanced search and retrieval capabilities"""
     
-    def __init__(self):
-        super().__init__()
+    def __init__(self, settings=None):
+        # Import settings here to avoid circular imports
+        if settings is None:
+            from .config import settings as default_settings
+            settings = default_settings
+            
+        super().__init__(settings)
         self.search_engine = AdvancedSearchEngine(self)
     
     def advanced_search(self, query: str, repo_id: str, 
@@ -1379,3 +1384,506 @@ class EnhancedRAGSystem(RAGSystem):
     def find_related_content(self, doc_id: str, repo_id: str, top_k: int = 5) -> List[SearchResult]:
         """Find content related to a specific document"""
         return self.search_engine.get_related_content(doc_id, repo_id, top_k)
+
+
+class OWASPCheatSheetLoader:
+    """Loads and manages OWASP cheat sheet content for RAG integration"""
+    
+    def __init__(self):
+        self.cheatsheets_path = Path("data/owasp_cheatsheets")
+        self.cheatsheet_cache = {}
+        self._load_cheatsheets()
+    
+    def _load_cheatsheets(self):
+        """Load all OWASP cheat sheets into memory"""
+        if not self.cheatsheets_path.exists():
+            logger.warning(f"OWASP cheat sheets directory not found: {self.cheatsheets_path}")
+            return
+        
+        for category_dir in self.cheatsheets_path.iterdir():
+            if category_dir.is_dir():
+                category_name = category_dir.name
+                self.cheatsheet_cache[category_name] = {}
+                
+                for cheatsheet_file in category_dir.glob("*.md"):
+                    try:
+                        with open(cheatsheet_file, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                        
+                        cheatsheet_name = cheatsheet_file.stem
+                        self.cheatsheet_cache[category_name][cheatsheet_name] = {
+                            'content': content,
+                            'file_path': str(cheatsheet_file),
+                            'category': category_name
+                        }
+                        
+                    except Exception as e:
+                        logger.warning(f"Failed to load cheat sheet {cheatsheet_file}: {e}")
+        
+        logger.info(f"Loaded {sum(len(sheets) for sheets in self.cheatsheet_cache.values())} OWASP cheat sheets")
+    
+    def get_cheatsheet_content(self, category: str, name: str) -> Optional[str]:
+        """Get content of a specific cheat sheet"""
+        return self.cheatsheet_cache.get(category, {}).get(name, {}).get('content')
+    
+    def search_cheatsheets(self, query: str, max_results: int = 5) -> List[Dict[str, Any]]:
+        """Search for relevant cheat sheet sections based on query"""
+        results = []
+        query_lower = query.lower()
+        
+        for category, sheets in self.cheatsheet_cache.items():
+            for sheet_name, sheet_data in sheets.items():
+                content = sheet_data['content']
+                
+                # Simple text matching for now - could be enhanced with embeddings
+                if any(term in content.lower() for term in query_lower.split()):
+                    # Extract relevant sections
+                    sections = self._extract_relevant_sections(content, query_lower)
+                    
+                    for section in sections:
+                        results.append({
+                            'category': category,
+                            'cheatsheet': sheet_name,
+                            'section_title': section['title'],
+                            'content': section['content'],
+                            'relevance_score': section['score'],
+                            'file_path': sheet_data['file_path']
+                        })
+        
+        # Sort by relevance and return top results
+        results.sort(key=lambda x: x['relevance_score'], reverse=True)
+        return results[:max_results]
+    
+    def _extract_relevant_sections(self, content: str, query: str) -> List[Dict[str, Any]]:
+        """Extract sections from cheat sheet content that match the query"""
+        sections = []
+        lines = content.split('\n')
+        current_section = {'title': '', 'content': '', 'score': 0}
+        
+        for line in lines:
+            if line.startswith('#'):
+                # Save previous section if it has content and relevance
+                if current_section['content'].strip() and current_section['score'] > 0:
+                    sections.append(current_section)
+                
+                # Start new section
+                current_section = {
+                    'title': line.strip('#').strip(),
+                    'content': line + '\n',
+                    'score': 0
+                }
+                
+                # Score based on title relevance
+                if any(term in current_section['title'].lower() for term in query.split()):
+                    current_section['score'] += 2
+            else:
+                current_section['content'] += line + '\n'
+                
+                # Score based on content relevance
+                line_lower = line.lower()
+                for term in query.split():
+                    if term in line_lower:
+                        current_section['score'] += 1
+        
+        # Add the last section
+        if current_section['content'].strip() and current_section['score'] > 0:
+            sections.append(current_section)
+        
+        return sections
+    
+    def get_all_categories(self) -> List[str]:
+        """Get all available cheat sheet categories"""
+        return list(self.cheatsheet_cache.keys())
+    
+    def get_cheatsheets_in_category(self, category: str) -> List[str]:
+        """Get all cheat sheet names in a category"""
+        return list(self.cheatsheet_cache.get(category, {}).keys())
+
+
+class OWASPGuidedRAGSystem(EnhancedRAGSystem):
+    """Enhanced RAG system with seamless OWASP guidance integration for wiki sections"""
+    
+    def __init__(self, settings=None):
+        # Import settings here to avoid circular imports
+        if settings is None:
+            from .config import settings as default_settings
+            settings = default_settings
+        
+        super().__init__(settings)
+        self.owasp_loader = OWASPCheatSheetLoader()
+        
+        # OWASP category mappings for different wiki sections
+        self.wiki_section_owasp_mapping = {
+            'executive_summary': ['threat-modeling', 'secure-design'],
+            'system_architecture': ['secure-design', 'cloud-security'],
+            'authentication_analysis': ['authentication', 'access-control'],
+            'data_flow_security': ['input-validation', 'secure-design'],
+            'vulnerability_analysis': ['code-review', 'input-validation'],
+            'threat_landscape': ['threat-modeling'],
+            'security_controls': ['access-control', 'authentication', 'logging'],
+            'risk_assessment': ['threat-modeling', 'secure-design'],
+            'security_checklist': ['code-review', 'secure-design'],
+            'code_findings': ['code-review', 'input-validation']
+        }
+    
+    async def get_contextual_owasp_guidance(self, security_finding: SecurityFinding, 
+                                          wiki_context: Dict[str, Any]) -> OWASPGuidance:
+        """
+        Retrieve relevant OWASP guidance for seamless wiki integration
+        
+        Args:
+            security_finding: SecurityFinding object with description, type, severity
+            wiki_context: Context about the wiki section being generated
+            
+        Returns:
+            OWASPGuidance with recommendations and integration points
+        """
+        # Build search query from security finding
+        query_parts = []
+        
+        if security_finding.description:
+            query_parts.append(security_finding.description)
+        
+        if security_finding.type:
+            query_parts.append(security_finding.type)
+        
+        if security_finding.affected_components:
+            query_parts.extend(security_finding.affected_components)
+        
+        search_query = ' '.join(query_parts)
+        
+        # Get relevant OWASP cheat sheets
+        relevant_cheatsheets = self.owasp_loader.search_cheatsheets(
+            query=search_query,
+            max_results=3
+        )
+        
+        # Contextualize guidance for the specific wiki section
+        contextualized_guidance = await self._contextualize_guidance(
+            relevant_cheatsheets,
+            wiki_context
+        )
+        
+        # Identify optimal integration points
+        integration_points = self._identify_integration_points(wiki_context)
+        
+        # Create OWASP mappings
+        owasp_mappings = self._create_owasp_mappings(relevant_cheatsheets)
+        
+        return OWASPGuidance(
+            recommendations=contextualized_guidance,
+            cheatsheet_references=relevant_cheatsheets,
+            integration_points=integration_points,
+            owasp_mappings=owasp_mappings
+        )
+    
+    async def get_wiki_section_owasp_guidance(self, section_type: str, 
+                                            section_content: str = "") -> OWASPGuidance:
+        """
+        Get OWASP guidance specifically tailored for a wiki section type
+        
+        Args:
+            section_type: Type of wiki section (e.g., 'authentication_analysis')
+            section_content: Existing content to enhance with OWASP guidance
+            
+        Returns:
+            Tailored OWASP guidance for the section
+        """
+        # Get relevant OWASP categories for this section type
+        relevant_categories = self.wiki_section_owasp_mapping.get(section_type, [])
+        
+        if not relevant_categories:
+            logger.warning(f"No OWASP mapping found for section type: {section_type}")
+            return OWASPGuidance()
+        
+        # Search for guidance in relevant categories
+        all_guidance = []
+        
+        for category in relevant_categories:
+            cheatsheets = self.owasp_loader.get_cheatsheets_in_category(category)
+            
+            for cheatsheet in cheatsheets:
+                content = self.owasp_loader.get_cheatsheet_content(category, cheatsheet)
+                if content:
+                    # Extract relevant sections based on section type
+                    relevant_sections = self._extract_section_relevant_content(
+                        content, section_type, section_content
+                    )
+                    
+                    for section in relevant_sections:
+                        all_guidance.append({
+                            'category': category,
+                            'cheatsheet': cheatsheet,
+                            'section_title': section['title'],
+                            'content': section['content'],
+                            'relevance_score': section['score']
+                        })
+        
+        # Sort by relevance and contextualize
+        all_guidance.sort(key=lambda x: x['relevance_score'], reverse=True)
+        top_guidance = all_guidance[:5]  # Top 5 most relevant
+        
+        # Contextualize for wiki integration
+        wiki_context = {
+            'section_type': section_type,
+            'existing_content': section_content
+        }
+        
+        contextualized_guidance = await self._contextualize_guidance(
+            top_guidance,
+            wiki_context
+        )
+        
+        # Create integration points and mappings
+        integration_points = self._identify_integration_points(wiki_context)
+        owasp_mappings = self._create_owasp_mappings(top_guidance)
+        
+        return OWASPGuidance(
+            recommendations=contextualized_guidance,
+            cheatsheet_references=top_guidance,
+            integration_points=integration_points,
+            owasp_mappings=owasp_mappings
+        )
+    
+    def search_owasp_cheatsheets(self, query: str, categories: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """
+        Search OWASP cheat sheets with optional category filtering
+        
+        Args:
+            query: Search query
+            categories: Optional list of categories to search in
+            
+        Returns:
+            List of relevant cheat sheet sections
+        """
+        if categories:
+            # Filter search to specific categories
+            filtered_results = []
+            for category in categories:
+                if category in self.owasp_loader.cheatsheet_cache:
+                    category_results = []
+                    sheets = self.owasp_loader.cheatsheet_cache[category]
+                    
+                    for sheet_name, sheet_data in sheets.items():
+                        content = sheet_data['content']
+                        sections = self.owasp_loader._extract_relevant_sections(content, query.lower())
+                        
+                        for section in sections:
+                            category_results.append({
+                                'category': category,
+                                'cheatsheet': sheet_name,
+                                'section_title': section['title'],
+                                'content': section['content'],
+                                'relevance_score': section['score'],
+                                'file_path': sheet_data['file_path']
+                            })
+                    
+                    filtered_results.extend(category_results)
+            
+            # Sort and return
+            filtered_results.sort(key=lambda x: x['relevance_score'], reverse=True)
+            return filtered_results
+        else:
+            # Search all categories
+            return self.owasp_loader.search_cheatsheets(query)
+    
+    def _extract_section_relevant_content(self, cheatsheet_content: str, 
+                                        section_type: str, existing_content: str) -> List[Dict[str, Any]]:
+        """Extract content from cheat sheet that's relevant to a specific wiki section"""
+        # Define section-specific keywords for better matching
+        section_keywords = {
+            'executive_summary': ['overview', 'summary', 'introduction', 'key points'],
+            'system_architecture': ['architecture', 'design', 'components', 'structure'],
+            'authentication_analysis': ['authentication', 'login', 'credentials', 'identity'],
+            'data_flow_security': ['data flow', 'input', 'output', 'validation', 'sanitization'],
+            'vulnerability_analysis': ['vulnerability', 'weakness', 'flaw', 'exploit'],
+            'threat_landscape': ['threat', 'attack', 'risk', 'STRIDE'],
+            'security_controls': ['controls', 'mitigation', 'protection', 'defense'],
+            'risk_assessment': ['risk', 'assessment', 'impact', 'likelihood'],
+            'security_checklist': ['checklist', 'requirements', 'guidelines', 'best practices'],
+            'code_findings': ['code', 'implementation', 'programming', 'development']
+        }
+        
+        keywords = section_keywords.get(section_type, [])
+        query = ' '.join(keywords + [section_type.replace('_', ' ')])
+        
+        return self.owasp_loader._extract_relevant_sections(cheatsheet_content, query)
+    
+    async def _contextualize_guidance(self, cheatsheet_sections: List[Dict[str, Any]], 
+                                    wiki_context: Dict[str, Any]) -> List[str]:
+        """
+        Adapt OWASP content for specific wiki section contexts
+        
+        Args:
+            cheatsheet_sections: List of relevant cheat sheet sections
+            wiki_context: Context about the wiki section being generated
+            
+        Returns:
+            List of contextualized guidance recommendations
+        """
+        contextualized_recommendations = []
+        section_type = wiki_context.get('section_type', 'general')
+        existing_content = wiki_context.get('existing_content', '')
+        
+        for section in cheatsheet_sections:
+            # Extract actionable recommendations from the cheat sheet content
+            recommendations = self._extract_actionable_recommendations(section['content'])
+            
+            # Contextualize each recommendation for the specific wiki section
+            for recommendation in recommendations:
+                contextualized = self._adapt_recommendation_for_section(
+                    recommendation, section_type, section['category']
+                )
+                
+                if contextualized and contextualized not in contextualized_recommendations:
+                    contextualized_recommendations.append(contextualized)
+        
+        return contextualized_recommendations[:10]  # Limit to top 10 recommendations
+    
+    def _extract_actionable_recommendations(self, content: str) -> List[str]:
+        """Extract actionable recommendations from cheat sheet content"""
+        recommendations = []
+        lines = content.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            
+            # Look for bullet points, numbered lists, or imperative statements
+            if (line.startswith('- ') or line.startswith('* ') or 
+                re.match(r'^\d+\.', line) or
+                any(verb in line.lower() for verb in ['ensure', 'implement', 'use', 'avoid', 'validate', 'sanitize'])):
+                
+                # Clean up the recommendation
+                cleaned = re.sub(r'^[-*\d\.]\s*', '', line)
+                if len(cleaned) > 20 and len(cleaned) < 200:  # Reasonable length
+                    recommendations.append(cleaned)
+        
+        return recommendations
+    
+    def _adapt_recommendation_for_section(self, recommendation: str, 
+                                        section_type: str, owasp_category: str) -> Optional[str]:
+        """Adapt a recommendation for a specific wiki section type"""
+        # Section-specific adaptation patterns
+        adaptations = {
+            'authentication_analysis': {
+                'prefix': 'For authentication security: ',
+                'focus': ['authentication', 'login', 'credentials', 'session']
+            },
+            'data_flow_security': {
+                'prefix': 'For data flow protection: ',
+                'focus': ['input', 'output', 'validation', 'sanitization', 'data']
+            },
+            'vulnerability_analysis': {
+                'prefix': 'To address vulnerabilities: ',
+                'focus': ['vulnerability', 'weakness', 'exploit', 'attack']
+            },
+            'security_controls': {
+                'prefix': 'Implement security control: ',
+                'focus': ['control', 'mitigation', 'protection', 'defense']
+            },
+            'code_findings': {
+                'prefix': 'For secure coding: ',
+                'focus': ['code', 'implementation', 'development', 'programming']
+            }
+        }
+        
+        adaptation = adaptations.get(section_type, {'prefix': '', 'focus': []})
+        
+        # Check if recommendation is relevant to the section
+        if adaptation['focus']:
+            if not any(focus_term in recommendation.lower() for focus_term in adaptation['focus']):
+                # If not directly relevant, check if it's a general security principle
+                general_terms = ['security', 'secure', 'protection', 'safety']
+                if not any(term in recommendation.lower() for term in general_terms):
+                    return None
+        
+        # Apply section-specific prefix if appropriate
+        if adaptation['prefix'] and not recommendation.lower().startswith(adaptation['prefix'].lower()):
+            return f"{adaptation['prefix']}{recommendation}"
+        
+        return recommendation
+    
+    def _identify_integration_points(self, wiki_context: Dict[str, Any]) -> List[str]:
+        """
+        Find optimal placement points for OWASP guidance within wiki sections
+        
+        Args:
+            wiki_context: Context about the wiki section
+            
+        Returns:
+            List of integration point descriptions
+        """
+        section_type = wiki_context.get('section_type', 'general')
+        
+        # Define integration points for each section type
+        integration_points_map = {
+            'executive_summary': [
+                'After key findings summary',
+                'Before risk overview',
+                'In recommendations section'
+            ],
+            'system_architecture': [
+                'After component descriptions',
+                'In security boundaries section',
+                'With trust zone definitions'
+            ],
+            'authentication_analysis': [
+                'After authentication flow description',
+                'In security controls section',
+                'With credential management details'
+            ],
+            'data_flow_security': [
+                'After data flow diagrams',
+                'In input validation section',
+                'With boundary crossing points'
+            ],
+            'vulnerability_analysis': [
+                'After vulnerability listings',
+                'In mitigation recommendations',
+                'With risk assessment details'
+            ],
+            'threat_landscape': [
+                'After STRIDE analysis',
+                'In threat scenario descriptions',
+                'With attack vector details'
+            ],
+            'security_controls': [
+                'Integrated with each control description',
+                'In implementation guidance',
+                'With effectiveness metrics'
+            ],
+            'risk_assessment': [
+                'After risk calculations',
+                'In mitigation strategy section',
+                'With residual risk analysis'
+            ],
+            'security_checklist': [
+                'As checklist item details',
+                'In implementation notes',
+                'With verification criteria'
+            ],
+            'code_findings': [
+                'After code examples',
+                'In remediation guidance',
+                'With secure coding patterns'
+            ]
+        }
+        
+        return integration_points_map.get(section_type, ['Throughout section content'])
+    
+    def _create_owasp_mappings(self, cheatsheet_sections: List[Dict[str, Any]]) -> List[OWASPMapping]:
+        """Create OWASP mapping objects from cheat sheet sections"""
+        mappings = []
+        
+        for section in cheatsheet_sections:
+            recommendations = self._extract_actionable_recommendations(section['content'])[:3]  # Top 3
+            
+            mapping = OWASPMapping(
+                cheatsheet=f"{section['category']}/{section['cheatsheet']}",
+                section=section['section_title'],
+                relevance_score=section['relevance_score'],
+                recommendations=recommendations
+            )
+            mappings.append(mapping)
+        
+        return mappings

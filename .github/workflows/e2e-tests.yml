@@ -1,0 +1,236 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  e2e-tests:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+        
+    steps:
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: |
+        npm ci
+        cd frontend && npm ci
+    
+    - name: Install Playwright Browsers
+      run: npx playwright install --with-deps ${{ matrix.browser }}
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install Python dependencies
+      run: |
+        pip install -r requirements.txt
+    
+    - name: Start backend server
+      run: |
+        python run_server.py &
+        sleep 10
+      env:
+        NODE_ENV: ci
+        DATABASE_PATH: ./data/test_ci.db
+    
+    - name: Build frontend
+      run: |
+        cd frontend
+        npm run build
+    
+    - name: Start frontend server
+      run: |
+        cd frontend
+        npm run preview &
+        sleep 5
+      env:
+        NODE_ENV: ci
+    
+    - name: Wait for servers to be ready
+      run: |
+        npx wait-on http://localhost:5173 http://localhost:8000/health --timeout 60000
+    
+    - name: Run E2E tests
+      run: npx playwright test --project=${{ matrix.browser }}
+      env:
+        NODE_ENV: ci
+        CI: true
+        BASE_URL: http://localhost:5173
+        API_URL: http://localhost:8000
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-report-${{ matrix.browser }}
+        path: playwright-report/
+        retention-days: 30
+    
+    - name: Upload test screenshots
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: playwright-screenshots-${{ matrix.browser }}
+        path: test-results/screenshots/
+        retention-days: 30
+
+  critical-path-tests:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: |
+        npm ci
+        cd frontend && npm ci
+    
+    - name: Install Playwright
+      run: npx playwright install chromium
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install Python dependencies
+      run: pip install -r requirements.txt
+    
+    - name: Start services
+      run: |
+        python run_server.py &
+        cd frontend && npm run dev &
+        sleep 15
+      env:
+        NODE_ENV: ci
+        DATABASE_PATH: ./data/test_critical.db
+    
+    - name: Run critical user journey tests
+      run: npx playwright test e2e/tests/critical-user-journeys.spec.ts --project=chromium
+      env:
+        NODE_ENV: ci
+        CI: true
+    
+    - name: Upload critical test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: critical-test-results
+        path: |
+          playwright-report/
+          test-results/
+        retention-days: 7
+
+  performance-tests:
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: |
+        npm ci
+        cd frontend && npm ci
+    
+    - name: Install Playwright
+      run: npx playwright install chromium
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install Python dependencies
+      run: pip install -r requirements.txt
+    
+    - name: Start services
+      run: |
+        python run_server.py &
+        cd frontend && npm run dev &
+        sleep 15
+      env:
+        NODE_ENV: ci
+        DATABASE_PATH: ./data/test_performance.db
+    
+    - name: Run performance tests
+      run: npx playwright test --trace on --project=chromium
+      env:
+        NODE_ENV: ci
+        CI: true
+        PERFORMANCE_TEST: true
+    
+    - name: Upload performance traces
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: performance-traces
+        path: test-results/
+        retention-days: 14
+
+  test-report:
+    needs: [e2e-tests, critical-path-tests, performance-tests]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+    
+    - name: Merge test reports
+      run: |
+        mkdir -p merged-report
+        find . -name "*.json" -path "*/playwright-report-*/*" -exec cp {} merged-report/ \;
+    
+    - name: Generate summary report
+      run: |
+        echo "# E2E Test Results Summary" > test-summary.md
+        echo "" >> test-summary.md
+        echo "## Test Execution Status" >> test-summary.md
+        echo "- **E2E Tests**: ${{ needs.e2e-tests.result }}" >> test-summary.md
+        echo "- **Critical Path Tests**: ${{ needs.critical-path-tests.result }}" >> test-summary.md
+        echo "- **Performance Tests**: ${{ needs.performance-tests.result }}" >> test-summary.md
+        echo "" >> test-summary.md
+        echo "## Artifacts" >> test-summary.md
+        echo "- Test reports and screenshots are available in the workflow artifacts" >> test-summary.md
+        echo "- Performance traces available for analysis" >> test-summary.md
+    
+    - name: Upload summary
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-summary
+        path: test-summary.md
+        retention-days: 30

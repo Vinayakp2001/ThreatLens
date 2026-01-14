@@ -1,8 +1,18 @@
 """
 Prompt templates for threat modeling document generation aligned with OWASP standards
 """
+import logging
 from typing import Dict, Any, List
-from .models import SecurityModel, Component, Flow
+from datetime import datetime
+try:
+    # Try relative imports first (for package usage)
+    from .models import SecurityModel, Component, Flow
+except ImportError:
+    # Fall back to absolute imports (for direct testing)
+    from models import SecurityModel, Component, Flow
+
+
+logger = logging.getLogger(__name__)
 
 
 class PromptTemplates:
@@ -387,7 +397,7 @@ Format as actionable markdown with specific implementation guidance and priority
 
 
 class ResponseParser:
-    """Parser for LLM responses with validation"""
+    """Parser for LLM responses with validation - enhanced for wiki format support"""
     
     @staticmethod
     def parse_threat_document(response_content: str, doc_type: str) -> Dict[str, Any]:
@@ -442,3 +452,187 @@ class ResponseParser:
             "content": response_content,
             "metadata": metadata
         }
+    
+    @staticmethod
+    def parse_for_wiki_section(response_content: str, section_type: str) -> str:
+        """
+        Parse and format LLM response content for wiki section integration
+        Preserves existing parsing capabilities while adding wiki-specific formatting
+        """
+        
+        # Basic validation - ensure we have content
+        if not response_content or len(response_content.strip()) < 50:
+            raise ValueError("Generated wiki content is too short or empty")
+        
+        # Clean and format the content for wiki integration
+        formatted_content = ResponseParser._format_wiki_content(response_content, section_type)
+        
+        # Validate wiki section structure
+        ResponseParser._validate_wiki_section_structure(formatted_content, section_type)
+        
+        return formatted_content
+    
+    @staticmethod
+    def _format_wiki_content(content: str, section_type: str) -> str:
+        """Format content for wiki integration"""
+        
+        lines = content.split('\n')
+        formatted_lines = []
+        
+        for line in lines:
+            # Clean up line
+            line = line.strip()
+            
+            # Skip empty lines at the beginning
+            if not line and not formatted_lines:
+                continue
+            
+            # Ensure proper markdown formatting
+            if line.startswith('# '):
+                # Convert top-level headers to section headers (##)
+                line = '#' + line
+            elif line.startswith('## '):
+                # Keep section headers as-is
+                pass
+            elif line.startswith('### '):
+                # Keep subsection headers as-is
+                pass
+            elif line.startswith('#### '):
+                # Keep sub-subsection headers as-is
+                pass
+            
+            # Ensure proper list formatting
+            if line.startswith('- ') or line.startswith('* '):
+                # Ensure consistent bullet point formatting
+                line = '- ' + line[2:]
+            elif line.startswith('1. ') or line.startswith('2. ') or line.startswith('3. '):
+                # Keep numbered lists as-is
+                pass
+            
+            formatted_lines.append(line)
+        
+        # Join lines and clean up excessive whitespace
+        formatted_content = '\n'.join(formatted_lines)
+        
+        # Remove excessive blank lines (more than 2 consecutive)
+        while '\n\n\n\n' in formatted_content:
+            formatted_content = formatted_content.replace('\n\n\n\n', '\n\n\n')
+        
+        # Ensure content ends with a single newline
+        formatted_content = formatted_content.rstrip() + '\n'
+        
+        return formatted_content
+    
+    @staticmethod
+    def _validate_wiki_section_structure(content: str, section_type: str) -> None:
+        """Validate that wiki section content has proper structure"""
+        
+        content_lower = content.lower()
+        
+        # Define expected content patterns for different section types
+        validation_patterns = {
+            "threat_landscape": {
+                "required_terms": ["threat", "stride", "spoofing", "tampering"],
+                "min_sections": 3,
+                "expected_headers": ["spoofing", "tampering", "repudiation", "information", "denial", "elevation"]
+            },
+            "vulnerability_analysis": {
+                "required_terms": ["vulnerability", "owasp", "top", "security"],
+                "min_sections": 5,
+                "expected_headers": ["broken access", "cryptographic", "injection", "insecure design"]
+            },
+            "component_analysis": {
+                "required_terms": ["component", "security", "analysis", "threat"],
+                "min_sections": 4,
+                "expected_headers": ["overview", "security", "threat", "recommendation"]
+            },
+            "flow_analysis": {
+                "required_terms": ["flow", "data", "security", "boundary"],
+                "min_sections": 4,
+                "expected_headers": ["flow", "security", "threat", "boundary"]
+            },
+            "system_overview": {
+                "required_terms": ["system", "security", "architecture", "component"],
+                "min_sections": 4,
+                "expected_headers": ["purpose", "architecture", "security", "asset"]
+            },
+            "mitigations": {
+                "required_terms": ["mitigation", "control", "security", "requirement"],
+                "min_sections": 5,
+                "expected_headers": ["authentication", "authorization", "validation", "encryption"]
+            }
+        }
+        
+        patterns = validation_patterns.get(section_type, {})
+        
+        # Check for required terms
+        required_terms = patterns.get("required_terms", [])
+        missing_terms = []
+        for term in required_terms:
+            if term not in content_lower:
+                missing_terms.append(term)
+        
+        # Count sections (headers)
+        section_count = content.count('##')
+        min_sections = patterns.get("min_sections", 2)
+        
+        # Check for expected headers
+        expected_headers = patterns.get("expected_headers", [])
+        missing_headers = []
+        for header in expected_headers:
+            if header not in content_lower:
+                missing_headers.append(header)
+        
+        # Log validation results (don't fail, just warn)
+        if missing_terms:
+            logger.warning(f"Wiki section {section_type} missing expected terms: {missing_terms}")
+        
+        if section_count < min_sections:
+            logger.warning(f"Wiki section {section_type} has {section_count} sections, expected at least {min_sections}")
+        
+        if len(missing_headers) > len(expected_headers) // 2:  # Allow some flexibility
+            logger.warning(f"Wiki section {section_type} missing many expected headers: {missing_headers}")
+        
+        # Only fail on critical issues
+        if len(content.strip()) < 200:
+            raise ValueError(f"Wiki section {section_type} content is too short")
+        
+        if section_count == 0:
+            raise ValueError(f"Wiki section {section_type} has no structured sections")
+    
+    @staticmethod
+    def extract_wiki_metadata(content: str, section_type: str) -> Dict[str, Any]:
+        """Extract metadata from wiki section content"""
+        
+        metadata = {
+            "section_type": section_type,
+            "content_length": len(content),
+            "section_count": content.count('##'),
+            "subsection_count": content.count('###'),
+            "list_items": content.count('- ') + content.count('* '),
+            "numbered_items": len([line for line in content.split('\n') if line.strip() and line.strip()[0].isdigit() and '. ' in line]),
+            "has_code_blocks": '```' in content,
+            "has_tables": '|' in content,
+            "validation_timestamp": datetime.now().isoformat()
+        }
+        
+        # Extract key terms for search indexing
+        content_lower = content.lower()
+        security_terms = [
+            "authentication", "authorization", "encryption", "vulnerability", 
+            "threat", "risk", "mitigation", "control", "owasp", "stride",
+            "spoofing", "tampering", "repudiation", "disclosure", "denial", "privilege"
+        ]
+        
+        found_terms = [term for term in security_terms if term in content_lower]
+        metadata["security_terms"] = found_terms
+        
+        # Extract potential cross-references
+        cross_ref_patterns = [
+            "see also", "refer to", "related to", "mentioned in", "described in"
+        ]
+        
+        has_cross_refs = any(pattern in content_lower for pattern in cross_ref_patterns)
+        metadata["has_cross_references"] = has_cross_refs
+        
+        return metadata

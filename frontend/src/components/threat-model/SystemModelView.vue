@@ -17,7 +17,7 @@
       </div>
 
       <!-- System Overview -->
-      <div v-else-if="system" class="space-y-8">
+      <div v-else-if="effectiveSystem" class="space-y-8">
         <!-- System Summary -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
@@ -26,25 +26,25 @@
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div class="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
               <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                {{ system.components?.length || 0 }}
+                {{ effectiveSystem.components?.length || 0 }}
               </div>
               <div class="text-sm text-gray-600 dark:text-gray-400">Components</div>
             </div>
             <div class="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
               <div class="text-2xl font-bold text-green-600 dark:text-green-400">
-                {{ system.data_stores?.length || 0 }}
+                {{ effectiveSystem.data_stores?.length || 0 }}
               </div>
               <div class="text-sm text-gray-600 dark:text-gray-400">Data Stores</div>
             </div>
             <div class="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
               <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                {{ system.data_flows?.length || 0 }}
+                {{ effectiveSystem.data_flows?.length || 0 }}
               </div>
               <div class="text-sm text-gray-600 dark:text-gray-400">Data Flows</div>
             </div>
             <div class="text-center p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
               <div class="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                {{ system.external_entities?.length || 0 }}
+                {{ effectiveSystem.external_entities?.length || 0 }}
               </div>
               <div class="text-sm text-gray-600 dark:text-gray-400">External Entities</div>
             </div>
@@ -52,7 +52,7 @@
         </div>
 
         <!-- Cloud Context -->
-        <div v-if="system.cloud_context" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div v-if="effectiveSystem.cloud_context" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <Cloud class="w-5 h-5 mr-2" />
             Cloud Context
@@ -61,21 +61,21 @@
             <div>
               <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Provider</dt>
               <dd class="text-sm text-gray-900 dark:text-gray-100 mt-1">
-                {{ system.cloud_context.provider || 'Not specified' }}
+                {{ effectiveSystem.cloud_context.provider || 'Not specified' }}
               </dd>
             </div>
             <div>
               <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Deployment Model</dt>
               <dd class="text-sm text-gray-900 dark:text-gray-100 mt-1">
-                {{ system.cloud_context.deployment_model || 'Not specified' }}
+                {{ effectiveSystem.cloud_context.deployment_model || 'Not specified' }}
               </dd>
             </div>
-            <div v-if="system.cloud_context.services_used?.length">
+            <div v-if="effectiveSystem.cloud_context.services_used?.length">
               <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Services Used</dt>
               <dd class="text-sm text-gray-900 dark:text-gray-100 mt-1">
                 <div class="flex flex-wrap gap-1">
                   <span
-                    v-for="service in system.cloud_context.services_used"
+                    v-for="service in effectiveSystem.cloud_context.services_used"
                     :key="service"
                     class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200"
                   >
@@ -84,12 +84,12 @@
                 </div>
               </dd>
             </div>
-            <div v-if="system.cloud_context.compliance_requirements?.length">
+            <div v-if="effectiveSystem.cloud_context.compliance_requirements?.length">
               <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Compliance Requirements</dt>
               <dd class="text-sm text-gray-900 dark:text-gray-100 mt-1">
                 <div class="flex flex-wrap gap-1">
                   <span
-                    v-for="req in system.cloud_context.compliance_requirements"
+                    v-for="req in effectiveSystem.cloud_context.compliance_requirements"
                     :key="req"
                     class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200"
                   >
@@ -102,14 +102,14 @@
         </div>
 
         <!-- Components -->
-        <div v-if="system.components?.length" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div v-if="effectiveSystem.components?.length" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <Building2 class="w-5 h-5 mr-2" />
             Components
           </h3>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div
-              v-for="component in system.components"
+              v-for="component in effectiveSystem.components"
               :key="component.id"
               class="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-md transition-shadow"
             >
@@ -135,14 +135,14 @@
         </div>
 
         <!-- Data Stores -->
-        <div v-if="system.data_stores?.length" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div v-if="effectiveSystem.data_stores?.length" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <Database class="w-5 h-5 mr-2" />
             Data Stores
           </h3>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div
-              v-for="dataStore in system.data_stores"
+              v-for="dataStore in effectiveSystem.data_stores"
               :key="dataStore.id"
               class="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-md transition-shadow"
             >
@@ -165,14 +165,14 @@
         </div>
 
         <!-- Data Flows -->
-        <div v-if="system.data_flows?.length" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div v-if="effectiveSystem.data_flows?.length" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <ArrowRightLeft class="w-5 h-5 mr-2" />
             Data Flows
           </h3>
           <div class="space-y-3">
             <div
-              v-for="flow in system.data_flows"
+              v-for="flow in effectiveSystem.data_flows"
               :key="flow.id"
               class="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
             >
@@ -208,14 +208,14 @@
         </div>
 
         <!-- External Entities -->
-        <div v-if="system.external_entities?.length" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div v-if="effectiveSystem.external_entities?.length" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <Users class="w-5 h-5 mr-2" />
             External Entities
           </h3>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div
-              v-for="entity in system.external_entities"
+              v-for="entity in effectiveSystem.external_entities"
               :key="entity.id"
               class="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-md transition-shadow"
             >
@@ -238,14 +238,14 @@
         </div>
 
         <!-- Trust Boundaries -->
-        <div v-if="system.trust_boundaries?.length" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div v-if="effectiveSystem.trust_boundaries?.length" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <Shield class="w-5 h-5 mr-2" />
             Trust Boundaries
           </h3>
           <div class="space-y-3">
             <div
-              v-for="boundary in system.trust_boundaries"
+              v-for="boundary in effectiveSystem.trust_boundaries"
               :key="boundary.id"
               class="border border-gray-200 dark:border-gray-600 rounded-lg p-4"
             >
@@ -295,50 +295,61 @@ import {
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 
 // Props
-interface Props {
-  system?: {
+interface SystemModel {
+  id: string
+  name: string
+  description: string
+  components: Array<{
     id: string
     name: string
-    description: string
-    components: Array<{
-      id: string
-      name: string
-      type: string
-      trust_level: string
-      interfaces: any[]
-    }>
-    data_stores: Array<{
-      id: string
-      name: string
-      type: string
-      data_classification: string
-    }>
-    data_flows: Array<{
-      id: string
-      source: string
-      destination: string
-      data_classification: string
-      protocol: string
-      authentication_required: boolean
-    }>
-    external_entities: Array<{
-      id: string
-      name: string
-      type: string
-      trust_level: string
-    }>
-    trust_boundaries: Array<{
-      id: string
-      name: string
-      components: string[]
-    }>
-    cloud_context: {
-      provider: string
-      services_used: string[]
-      deployment_model: string
-      compliance_requirements: string[]
-    }
+    type: string
+    trust_level: string
+    interfaces: any[]
+  }>
+  data_stores: Array<{
+    id: string
+    name: string
+    type: string
+    data_classification: string
+  }>
+  data_flows: Array<{
+    id: string
+    source: string
+    destination: string
+    data_classification: string
+    protocol: string
+    authentication_required: boolean
+  }>
+  external_entities: Array<{
+    id: string
+    name: string
+    type: string
+    trust_level: string
+  }>
+  trust_boundaries: Array<{
+    id: string
+    name: string
+    components: string[]
+  }>
+  cloud_context: {
+    provider: string
+    services_used: string[]
+    deployment_model: string
+    compliance_requirements: string[]
   }
+}
+
+interface WikiSection {
+  id: string
+  title: string
+  content: string
+  security_findings: any[]
+  code_references: any[]
+}
+
+interface Props {
+  system?: SystemModel
+  wikiSection?: WikiSection
   loading?: boolean
 }
 
@@ -346,10 +357,36 @@ const props = withDefaults(defineProps<Props>(), {
   loading: false
 })
 
+// Extract system information from wiki section if provided
+const effectiveSystem = computed(() => {
+  if (props.wikiSection && !props.system) {
+    // Try to extract system information from wiki content
+    // This is a simplified extraction - in a real implementation,
+    // the wiki section would contain structured system data
+    return {
+      id: 'wiki-system',
+      name: 'System from Wiki',
+      description: 'System information extracted from wiki section',
+      components: [],
+      data_stores: [],
+      data_flows: [],
+      external_entities: [],
+      trust_boundaries: [],
+      cloud_context: {
+        provider: 'Unknown',
+        services_used: [],
+        deployment_model: 'Unknown',
+        compliance_requirements: []
+      }
+    }
+  }
+  return props.system
+})
+
 // Computed properties
 const componentMap = computed(() => {
-  if (!props.system?.components) return new Map()
-  return new Map(props.system.components.map(c => [c.id, c.name]))
+  if (!effectiveSystem.value?.components) return new Map()
+  return new Map(effectiveSystem.value.components.map(c => [c.id, c.name]))
 })
 
 // Utility functions

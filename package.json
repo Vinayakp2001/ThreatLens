@@ -1,11 +1,43 @@
 {
-  "dependencies": {
-    "clsx": "^2.1.1",
-    "lucide-react": "^0.562.0",
-    "react-markdown": "^10.1.0",
-    "tailwind-merge": "^3.4.0"
+  "name": "threatlens",
+  "version": "1.0.0",
+  "description": "ThreatLens - AI-powered security analysis platform",
+  "main": "index.js",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
+    "test:e2e:install": "playwright install",
+    "test:e2e:install-deps": "playwright install-deps",
+    "test:e2e:codegen": "playwright codegen localhost:5173",
+    "test:e2e:trace": "playwright test --trace on",
+    "test:e2e:critical": "playwright test e2e/tests/critical-user-journeys.spec.ts",
+    "test:e2e:edge-cases": "playwright test e2e/tests/edge-cases-and-errors.spec.ts",
+    "test:e2e:ci": "playwright test --reporter=github",
+    "test:e2e:runner": "tsx e2e/scripts/run-tests.ts",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "python run_server.py",
+    "dev:full": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "build:frontend": "cd frontend && npm run build",
+    "lint:frontend": "cd frontend && npm run lint",
+    "format:frontend": "cd frontend && npm run format"
   },
+  "keywords": [
+    "security",
+    "threat-analysis",
+    "ai",
+    "cybersecurity"
+  ],
+  "author": "ThreatLens Team",
+  "license": "MIT",
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.18"
+    "@playwright/test": "^1.40.0",
+    "concurrently": "^8.2.2",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "tsx": "^4.6.0",
+    "wait-on": "^7.2.0"
   }
 }

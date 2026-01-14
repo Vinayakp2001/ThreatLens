@@ -1,0 +1,36 @@
+{
+  "alerts": {
+    "email_enabled": true,
+    "webhook_enabled": false,
+    "slack_enabled": false,
+    "email_recipients": [
+      "security-team@company.com",
+      "admin@company.com"
+    ],
+    "webhook_url": null,
+    "slack_webhook_url": null,
+    "alert_thresholds": {
+      "critical_errors_per_hour": 5,
+      "high_errors_per_hour": 20,
+      "total_errors_per_hour": 100,
+      "data_corruption_threshold": 1,
+      "authentication_failures_per_hour": 50
+    }
+  },
+  "recovery": {
+    "auto_recovery_enabled": true,
+    "backup_retention_days": 30,
+    "max_recovery_attempts": 3,
+    "recovery_timeout_minutes": 30
+  },
+  "monitoring": {
+    "health_check_interval_seconds": 60,
+    "error_rate_check_interval_seconds": 300,
+    "cleanup_interval_hours": 1
+  },
+  "circuit_breakers": {
+    "failure_threshold": 5,
+    "timeout_minutes": 5,
+    "half_open_max_calls": 3
+  }
+}

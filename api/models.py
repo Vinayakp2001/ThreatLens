@@ -8,6 +8,9 @@ from datetime import datetime
 
 
 class ComponentType(str, Enum):
+    PROCESS = "process"
+    EXTERNAL_ENTITY = "external_entity"
+    DATA_STORE = "data_store"
     SERVICE = "service"
     CONTROLLER = "controller"
     MIDDLEWARE = "middleware"
@@ -51,6 +54,7 @@ class StrideCategory(str, Enum):
 
 
 class ImpactLevel(str, Enum):
+    UNKNOWN = "unknown"
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -58,6 +62,7 @@ class ImpactLevel(str, Enum):
 
 
 class LikelihoodLevel(str, Enum):
+    UNKNOWN = "unknown"
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -76,8 +81,8 @@ class Component(BaseModel):
     """System component model"""
     id: str
     name: str
-    type: ComponentType
-    file_path: str
+    component_type: ComponentType  # Changed from 'type' to 'component_type'
+    file_path: Optional[str] = None
     endpoints: List[Endpoint] = Field(default_factory=list)
     dependencies: List[str] = Field(default_factory=list)
     handles_sensitive_data: bool = False
@@ -125,6 +130,30 @@ class Flow(BaseModel):
     description: Optional[str] = None
 
 
+class Mitigation(BaseModel):
+    """Security mitigation model"""
+    id: str
+    description: str
+    implementation_notes: Optional[str] = None
+    status: str = "proposed"  # proposed, implemented, verified
+    effectiveness: Optional[str] = None  # low, medium, high
+    cost: Optional[str] = None  # low, medium, high
+    priority: Optional[str] = None  # low, medium, high, critical
+
+
+class Threat(BaseModel):
+    """Individual threat model"""
+    id: str
+    title: str
+    description: str
+    stride_category: StrideCategory
+    impact: ImpactLevel
+    likelihood: LikelihoodLevel
+    affected_components: List[str] = Field(default_factory=list)
+    mitigations: List[Mitigation] = Field(default_factory=list)
+    cwe_references: List[str] = Field(default_factory=list)
+
+
 class SecurityPatterns(BaseModel):
     """Security patterns detected in the codebase"""
     authentication_mechanisms: List[str] = Field(default_factory=list)
@@ -136,13 +165,18 @@ class SecurityPatterns(BaseModel):
 
 class SecurityModel(BaseModel):
     """Complete security model of the repository"""
-    repo_id: str
+    id: str
+    name: str
+    description: Optional[str] = None
+    repo_id: Optional[str] = None
     components: List[Component] = Field(default_factory=list)
     data_stores: List[DataStore] = Field(default_factory=list)
     flows: List[Flow] = Field(default_factory=list)
+    threats: List[Threat] = Field(default_factory=list)  # Added threats field
     security_patterns: SecurityPatterns = Field(default_factory=SecurityPatterns)
     trust_boundaries: List[TrustBoundary] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
 
 
 class StructureAnalysis(BaseModel):
@@ -218,18 +252,6 @@ class ThreatDoc(BaseModel):
     updated_at: Optional[datetime] = None
 
 
-class Threat(BaseModel):
-    """Individual threat model"""
-    id: str
-    stride_category: StrideCategory
-    description: str
-    affected_components: List[str] = Field(default_factory=list)
-    impact_level: ImpactLevel
-    likelihood: LikelihoodLevel
-    mitigations: List[str] = Field(default_factory=list)
-    cwe_references: List[str] = Field(default_factory=list)
-
-
 class SearchResult(BaseModel):
     """Search result from RAG system"""
     doc_id: str
@@ -248,3 +270,105 @@ class Embedding(BaseModel):
     content_id: str
     embedding_vector: List[float]
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+# New Wiki-specific models for consolidated security documentation
+
+class SecurityFinding(BaseModel):
+    """Security finding for wiki integration"""
+    id: str
+    type: str  # vulnerability, threat, risk, etc.
+    severity: str  # low, medium, high, critical
+    description: str
+    affected_components: List[str] = Field(default_factory=list)
+    owasp_category: Optional[str] = None
+    stride_category: Optional[str] = None
+    recommendations: List[str] = Field(default_factory=list)
+    code_references: List[CodeReference] = Field(default_factory=list)
+
+
+class OWASPMapping(BaseModel):
+    """OWASP guideline mapping"""
+    cheatsheet: str
+    section: str
+    relevance_score: float
+    recommendations: List[str] = Field(default_factory=list)
+
+
+class OWASPGuidance(BaseModel):
+    """OWASP guidance for wiki integration"""
+    recommendations: List[str] = Field(default_factory=list)
+    cheatsheet_references: List[Dict[str, Any]] = Field(default_factory=list)
+    integration_points: List[str] = Field(default_factory=list)
+    owasp_mappings: List[OWASPMapping] = Field(default_factory=list)
+
+
+class WikiSectionContent(BaseModel):
+    """Content for wiki section generation"""
+    title: str
+    content: str
+    cross_references: List[str] = Field(default_factory=list)
+    owasp_mappings: List[str] = Field(default_factory=list)
+    code_snippets: List[CodeReference] = Field(default_factory=list)
+    recommendations: List[str] = Field(default_factory=list)
+
+
+class WikiSection(BaseModel):
+    """Individual wiki section"""
+    id: str
+    title: str
+    content: str
+    subsections: List['WikiSection'] = Field(default_factory=list)
+    cross_references: List[str] = Field(default_factory=list)
+    owasp_mappings: List[str] = Field(default_factory=list)
+    code_references: List[CodeReference] = Field(default_factory=list)
+    security_findings: List[SecurityFinding] = Field(default_factory=list)
+    recommendations: List[str] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class SecurityWiki(BaseModel):
+    """Unified security wiki structure"""
+    id: str
+    repo_id: str
+    title: str
+    sections: Dict[str, WikiSection] = Field(default_factory=dict)
+    cross_references: Dict[str, List[str]] = Field(default_factory=dict)
+    search_index: Dict[str, Any] = Field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: Optional[datetime] = None
+
+
+# Enable forward references for WikiSection self-reference
+WikiSection.model_rebuild()
+
+
+# User Wiki Collection Models (Phase 1 MVP)
+
+class UserWiki(BaseModel):
+    """User's personal wiki collection entry"""
+    id: str
+    user_id: str
+    repo_id: str
+    repository_url: str
+    repository_name: str
+    wiki_id: Optional[str] = None  # Reference to SecurityWiki
+    analysis_status: str = "pending"  # pending, analyzing, completed, failed
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: Optional[datetime] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    
+    # Computed fields for UI display
+    @property
+    def display_name(self) -> str:
+        """Get display name for the repository"""
+        if self.repository_name:
+            return self.repository_name
+        # Extract name from URL as fallback
+        return self.repository_url.split('/')[-1].replace('.git', '')
+    
+    @property
+    def is_completed(self) -> bool:
+        """Check if analysis is completed"""
+        return self.analysis_status == "completed"

@@ -9,7 +9,7 @@
         @focus="handleInputFocus"
         @keydown="handleKeyDown"
         type="text"
-        placeholder="Search documentation..."
+        :placeholder="props.searchType === 'wiki' ? 'Search wiki sections...' : 'Search documentation...'"
         class="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
       />
       
@@ -63,32 +63,73 @@
 
       <!-- Results -->
       <div v-else class="py-2">
+        <!-- Search Filters for Wiki -->
+        <div v-if="props.searchType === 'wiki' && searchState.results.length > 0" class="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
+          <div class="flex items-center space-x-4 text-xs">
+            <label class="flex items-center space-x-1">
+              <input
+                v-model="searchFilters.showFindings"
+                type="checkbox"
+                class="rounded border-gray-300 dark:border-gray-600"
+              />
+              <span class="text-gray-600 dark:text-gray-400">With Findings</span>
+            </label>
+            <label class="flex items-center space-x-1">
+              <input
+                v-model="searchFilters.showOwasp"
+                type="checkbox"
+                class="rounded border-gray-300 dark:border-gray-600"
+              />
+              <span class="text-gray-600 dark:text-gray-400">OWASP References</span>
+            </label>
+            <select
+              v-model="searchFilters.sectionType"
+              class="text-xs rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+            >
+              <option value="">All Sections</option>
+              <option value="executive_summary">Executive Summary</option>
+              <option value="system_architecture">System Architecture</option>
+              <option value="vulnerability_analysis">Vulnerabilities</option>
+              <option value="threat_landscape">Threats</option>
+              <option value="security_controls">Security Controls</option>
+            </select>
+          </div>
+        </div>
+
         <button
-          v-for="(result, index) in searchState.results"
-          :key="`${result.doc_id}-${index}`"
+          v-for="(result, index) in filteredResults"
+          :key="`${result.doc_id || result.section_id}-${index}`"
           @click="handleResultClick(result)"
           class="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-b-0 transition-colors focus:outline-none focus:bg-gray-50 dark:focus:bg-gray-700"
         >
           <div class="flex items-start space-x-3">
             <div class="flex-shrink-0 mt-1">
-              <FileText class="h-4 w-4 text-gray-400" />
+              <component :is="getResultIcon(result)" class="h-4 w-4 text-gray-400" />
             </div>
             <div class="flex-1 min-w-0">
               <div class="flex items-center space-x-2 mb-1">
                 <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                   {{ result.title }}
                 </h4>
-                <span :class="cn('inline-flex items-center px-2 py-0.5 rounded text-xs font-medium', getDocTypeColor(result.doc_type))">
-                  {{ getDocTypeDisplayName(result.doc_type) }}
+                <span :class="cn('inline-flex items-center px-2 py-0.5 rounded text-xs font-medium', getResultTypeColor(result))">
+                  {{ getResultTypeDisplayName(result) }}
                 </span>
               </div>
               <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
                 {{ result.content_snippet }}
               </p>
               <div class="flex items-center justify-between mt-2">
-                <span class="text-xs text-gray-500 dark:text-gray-500">
-                  Relevance: {{ Math.round(result.relevance_score * 100) }}%
-                </span>
+                <div class="flex items-center space-x-2">
+                  <span class="text-xs text-gray-500 dark:text-gray-500">
+                    Relevance: {{ Math.round(result.relevance_score * 100) }}%
+                  </span>
+                  <span v-if="result.security_findings?.length" class="text-xs text-red-500 dark:text-red-400">
+                    {{ result.security_findings.length }} finding(s)
+                  </span>
+                  <span v-if="result.owasp_mappings?.length" class="text-xs text-green-600 dark:text-green-400">
+                    {{ result.owasp_mappings.length }} OWASP ref(s)
+                  </span>
+                </div>
                 <ExternalLink class="h-3 w-3 text-gray-400" />
               </div>
             </div>
@@ -100,8 +141,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
-import { Search, X, FileText, ExternalLink } from 'lucide-vue-next'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { 
+  Search, 
+  X, 
+  FileText, 
+  ExternalLink, 
+  BookOpen, 
+  BarChart3, 
+  Building2, 
+  AlertTriangle, 
+  Shield, 
+  Settings, 
+  Lock, 
+  ArrowRight, 
+  Code 
+} from 'lucide-vue-next'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import LoadingSpinner from './LoadingSpinner.vue'
@@ -109,25 +164,33 @@ import ErrorDisplay from './ErrorDisplay.vue'
 
 interface Props {
   repoId: string
-  onDocumentSelect: (docId: string) => void
+  onDocumentSelect?: (docId: string) => void
+  onSectionSelect?: (sectionId: string) => void
   className?: string
+  searchType?: 'documents' | 'wiki'
 }
 
 interface SearchResult {
-  doc_id: string
+  doc_id?: string
+  section_id?: string
   title: string
   content_snippet: string
   relevance_score: number
-  doc_type: string
+  doc_type?: string
+  section_type?: string
   code_references: any[]
+  security_findings?: any[]
+  owasp_mappings?: string[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  className: ''
+  className: '',
+  searchType: 'documents'
 })
 
 const emit = defineEmits<{
   documentSelect: [docId: string]
+  sectionSelect: [sectionId: string]
 }>()
 
 const searchInput = ref<HTMLInputElement>()
@@ -143,8 +206,35 @@ const searchState = reactive({
   hasSearched: false
 })
 
+const searchFilters = reactive({
+  showFindings: false,
+  showOwasp: false,
+  sectionType: ''
+})
+
 // Cache for search results
 const searchCache = new Map<string, SearchResult[]>()
+
+// Computed filtered results
+const filteredResults = computed(() => {
+  let results = searchState.results
+
+  if (props.searchType === 'wiki') {
+    if (searchFilters.showFindings) {
+      results = results.filter(r => r.security_findings && r.security_findings.length > 0)
+    }
+    
+    if (searchFilters.showOwasp) {
+      results = results.filter(r => r.owasp_mappings && r.owasp_mappings.length > 0)
+    }
+    
+    if (searchFilters.sectionType) {
+      results = results.filter(r => r.section_type === searchFilters.sectionType)
+    }
+  }
+
+  return results
+})
 
 const performSearch = async (query: string) => {
   if (!query.trim()) {
@@ -156,7 +246,7 @@ const performSearch = async (query: string) => {
   }
 
   // Check cache first
-  const cacheKey = `${props.repoId}:${query.toLowerCase()}`
+  const cacheKey = `${props.repoId}:${props.searchType}:${query.toLowerCase()}`
   const cachedResults = searchCache.get(cacheKey)
   
   if (cachedResults) {
@@ -171,11 +261,19 @@ const performSearch = async (query: string) => {
   searchState.error = null
 
   try {
-    const response = await api.searchDocuments({
-      query: query.trim(),
-      repo_id: props.repoId,
-      limit: 10
-    })
+    let response
+    
+    if (props.searchType === 'wiki') {
+      // Search wiki content
+      response = await api.searchWikiContent(props.repoId, query.trim())
+    } else {
+      // Search documents (legacy)
+      response = await api.searchDocuments({
+        query: query.trim(),
+        repo_id: props.repoId,
+        limit: 10
+      })
+    }
 
     // Cache the results
     searchCache.set(cacheKey, response.results)
@@ -213,8 +311,14 @@ const handleInputFocus = () => {
 }
 
 const handleResultClick = (result: SearchResult) => {
-  emit('documentSelect', result.doc_id)
-  props.onDocumentSelect(result.doc_id)
+  if (props.searchType === 'wiki' && result.section_id) {
+    emit('sectionSelect', result.section_id)
+    props.onSectionSelect?.(result.section_id)
+  } else if (result.doc_id) {
+    emit('documentSelect', result.doc_id)
+    props.onDocumentSelect?.(result.doc_id)
+  }
+  
   searchState.isOpen = false
   searchInput.value?.blur()
 }
@@ -233,6 +337,90 @@ const handleKeyDown = (event: KeyboardEvent) => {
   if (event.key === 'Escape') {
     searchState.isOpen = false
     searchInput.value?.blur()
+  }
+}
+
+const getResultIcon = (result: SearchResult) => {
+  if (props.searchType === 'wiki') {
+    // Wiki section icons
+    const sectionIcons: Record<string, any> = {
+      'executive_summary': BarChart3,
+      'system_architecture': Building2,
+      'vulnerability_analysis': AlertTriangle,
+      'threat_landscape': Shield,
+      'security_controls': Settings,
+      'authentication_analysis': Lock,
+      'data_flow_security': ArrowRight,
+      'risk_assessment': BarChart3,
+      'security_checklist': FileText,
+      'code_findings': Code
+    }
+    return sectionIcons[result.section_type || ''] || BookOpen
+  }
+  return FileText
+}
+
+const getResultTypeDisplayName = (result: SearchResult): string => {
+  if (props.searchType === 'wiki') {
+    const sectionNames: Record<string, string> = {
+      'executive_summary': 'Executive Summary',
+      'system_architecture': 'System Architecture',
+      'vulnerability_analysis': 'Vulnerabilities',
+      'threat_landscape': 'Threats',
+      'security_controls': 'Security Controls',
+      'authentication_analysis': 'Authentication',
+      'data_flow_security': 'Data Flow',
+      'risk_assessment': 'Risk Assessment',
+      'security_checklist': 'Security Checklist',
+      'code_findings': 'Code Findings'
+    }
+    return sectionNames[result.section_type || ''] || 'Wiki Section'
+  }
+  
+  // Legacy document types
+  switch (result.doc_type) {
+    case 'system_overview':
+      return 'System Overview'
+    case 'component_profile':
+      return 'Component Profile'
+    case 'flow_threat_model':
+      return 'Flow Model'
+    case 'mitigation':
+      return 'Mitigation'
+    default:
+      return 'Document'
+  }
+}
+
+const getResultTypeColor = (result: SearchResult): string => {
+  if (props.searchType === 'wiki') {
+    const sectionColors: Record<string, string> = {
+      'executive_summary': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+      'system_architecture': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+      'vulnerability_analysis': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+      'threat_landscape': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+      'security_controls': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+      'authentication_analysis': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
+      'data_flow_security': 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200',
+      'risk_assessment': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+      'security_checklist': 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
+      'code_findings': 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+    }
+    return sectionColors[result.section_type || ''] || 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+  }
+  
+  // Legacy document type colors
+  switch (result.doc_type) {
+    case 'system_overview':
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+    case 'component_profile':
+      return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+    case 'flow_threat_model':
+      return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+    case 'mitigation':
+      return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+    default:
+      return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
   }
 }
 

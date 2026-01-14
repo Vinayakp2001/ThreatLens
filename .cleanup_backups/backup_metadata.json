@@ -1,0 +1,192 @@
+{
+  "test_1768123384_a408642f": {
+    "backup_id": "test_1768123384_a408642f",
+    "timestamp": 1768123384.314984,
+    "files_backed_up": [
+      "debug_api_routes.py",
+      "debug_imports.py"
+    ],
+    "operation_type": "test",
+    "description": "",
+    "original_locations": {
+      "debug_api_routes.py": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\test_1768123384_a408642f\\debug_api_routes.py",
+      "debug_imports.py": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\test_1768123384_a408642f\\debug_imports.py"
+    }
+  },
+  "test_1768123411_7249ac68": {
+    "backup_id": "test_1768123411_7249ac68",
+    "timestamp": 1768123411.9612377,
+    "files_backed_up": [
+      "debug_api_routes.py",
+      "debug_imports.py"
+    ],
+    "operation_type": "test",
+    "description": "",
+    "original_locations": {
+      "debug_api_routes.py": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\test_1768123411_7249ac68\\debug_api_routes.py",
+      "debug_imports.py": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\test_1768123411_7249ac68\\debug_imports.py"
+    }
+  },
+  "test_1768123453_8eba8ad9": {
+    "backup_id": "test_1768123453_8eba8ad9",
+    "timestamp": 1768123453.3663867,
+    "files_backed_up": [
+      "debug_api_routes.py",
+      "debug_imports.py"
+    ],
+    "operation_type": "test",
+    "description": "",
+    "original_locations": {
+      "debug_api_routes.py": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\test_1768123453_8eba8ad9\\debug_api_routes.py",
+      "debug_imports.py": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\test_1768123453_8eba8ad9\\debug_imports.py"
+    }
+  },
+  "test_1768124576_d8d4dc31": {
+    "backup_id": "test_1768124576_d8d4dc31",
+    "timestamp": 1768124576.7476904,
+    "files_backed_up": [
+      "debug_api_routes.py",
+      "debug_imports.py"
+    ],
+    "operation_type": "test",
+    "description": "",
+    "original_locations": {
+      "debug_api_routes.py": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\test_1768124576_d8d4dc31\\debug_api_routes.py",
+      "debug_imports.py": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\test_1768124576_d8d4dc31\\debug_imports.py"
+    }
+  },
+  "remove_obsolete_debug_files_1768124609_1f064a22": {
+    "backup_id": "remove_obsolete_debug_files_1768124609_1f064a22",
+    "timestamp": 1768124609.5358024,
+    "files_backed_up": [
+      "debug_api_routes.py",
+      "debug_imports.py"
+    ],
+    "operation_type": "remove_obsolete_debug_files",
+    "description": "Backup for cleanup operation remove_obsolete_debug_files_1768124604_ee4aee79",
+    "original_locations": {
+      "debug_api_routes.py": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\remove_obsolete_debug_files_1768124609_1f064a22\\debug_api_routes.py",
+      "debug_imports.py": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\remove_obsolete_debug_files_1768124609_1f064a22\\debug_imports.py"
+    }
+  },
+  "remove_obsolete_debug_files_1768124897_b222b44a": {
+    "backup_id": "remove_obsolete_debug_files_1768124897_b222b44a",
+    "timestamp": 1768124897.1497111,
+    "files_backed_up": [
+      "debug_api_routes.py",
+      "debug_imports.py"
+    ],
+    "operation_type": "remove_obsolete_debug_files",
+    "description": "Backup for cleanup operation remove_obsolete_debug_files_1768124890_d7cebedd",
+    "original_locations": {
+      "debug_api_routes.py": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\remove_obsolete_debug_files_1768124897_b222b44a\\debug_api_routes.py",
+      "debug_imports.py": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\remove_obsolete_debug_files_1768124897_b222b44a\\debug_imports.py"
+    }
+  },
+  "remove_obsolete_debug_files_1768125078_55788667": {
+    "backup_id": "remove_obsolete_debug_files_1768125078_55788667",
+    "timestamp": 1768125078.2098367,
+    "files_backed_up": [
+      "debug_api_routes.py",
+      "debug_imports.py"
+    ],
+    "operation_type": "remove_obsolete_debug_files",
+    "description": "Backup for cleanup operation remove_obsolete_debug_files_1768125075_e8bf42f1",
+    "original_locations": {
+      "debug_api_routes.py": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\remove_obsolete_debug_files_1768125078_55788667\\debug_api_routes.py",
+      "debug_imports.py": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\remove_obsolete_debug_files_1768125078_55788667\\debug_imports.py"
+    }
+  },
+  "cleanup_temporary_development_files_1768125293_2f2a5b80": {
+    "backup_id": "cleanup_temporary_development_files_1768125293_2f2a5b80",
+    "timestamp": 1768125293.8172417,
+    "files_backed_up": [
+      "test_wiki_card.html",
+      "api\\__pycache__\\analysis_router.cpython-311.pyc",
+      "api\\__pycache__\\concurrency.cpython-311.pyc",
+      "api\\__pycache__\\config.cpython-311.pyc",
+      "api\\__pycache__\\config.cpython-314.pyc",
+      "api\\__pycache__\\context_integration.cpython-311.pyc",
+      "api\\__pycache__\\database.cpython-311.pyc",
+      "api\\__pycache__\\document_storage.cpython-311.pyc",
+      "api\\__pycache__\\knowledge_base.cpython-311.pyc",
+      "api\\__pycache__\\llm_client.cpython-311.pyc",
+      "api\\__pycache__\\main.cpython-311.pyc",
+      "api\\__pycache__\\migrations.cpython-311.pyc",
+      "api\\__pycache__\\models.cpython-311.pyc",
+      "api\\__pycache__\\models.cpython-314.pyc",
+      "api\\__pycache__\\monitoring.cpython-311.pyc",
+      "api\\__pycache__\\partial_results.cpython-311.pyc",
+      "api\\__pycache__\\prompt_templates.cpython-311.pyc",
+      "api\\__pycache__\\pr_analyzer.cpython-311.pyc",
+      "api\\__pycache__\\rag.cpython-311.pyc",
+      "api\\__pycache__\\rag.cpython-314.pyc",
+      "api\\__pycache__\\repo_ingest.cpython-311.pyc",
+      "api\\__pycache__\\repo_ingest.cpython-314.pyc",
+      "api\\__pycache__\\resource_manager.cpython-311.pyc",
+      "api\\__pycache__\\resource_manager.cpython-314.pyc",
+      "api\\__pycache__\\security_content_generators.cpython-311.pyc",
+      "api\\__pycache__\\security_model.cpython-311.pyc",
+      "api\\__pycache__\\security_model.cpython-314.pyc",
+      "api\\__pycache__\\security_wiki_generator.cpython-311.pyc",
+      "api\\__pycache__\\smart_workflow.cpython-311.pyc",
+      "api\\__pycache__\\storage_manager.cpython-311.pyc",
+      "api\\__pycache__\\threat_analysis_provider.cpython-311.pyc",
+      "api\\__pycache__\\threat_docs.cpython-311.pyc",
+      "api\\__pycache__\\user_utils.cpython-311.pyc",
+      "api\\__pycache__\\wiki_error_handler.cpython-311.pyc",
+      "api\\__pycache__\\wiki_migration.cpython-311.pyc",
+      "api\\__pycache__\\wiki_storage.cpython-311.pyc",
+      "api\\__pycache__\\__init__.cpython-311.pyc",
+      "api\\__pycache__\\__init__.cpython-314.pyc",
+      "__pycache__\\cleanup_utils.cpython-311.pyc",
+      "__pycache__\\test_security_model.cpython-314-pytest-9.0.2.pyc",
+      "__pycache__\\test_threat_analysis_provider.cpython-311-pytest-9.0.2.pyc"
+    ],
+    "operation_type": "cleanup_temporary_development_files",
+    "description": "Backup for cleanup operation cleanup_temporary_development_files_1768125288_72a8b93f",
+    "original_locations": {
+      "test_wiki_card.html": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\test_wiki_card.html",
+      "api\\__pycache__\\analysis_router.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\analysis_router.cpython-311.pyc",
+      "api\\__pycache__\\concurrency.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\concurrency.cpython-311.pyc",
+      "api\\__pycache__\\config.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\config.cpython-311.pyc",
+      "api\\__pycache__\\config.cpython-314.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\config.cpython-314.pyc",
+      "api\\__pycache__\\context_integration.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\context_integration.cpython-311.pyc",
+      "api\\__pycache__\\database.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\database.cpython-311.pyc",
+      "api\\__pycache__\\document_storage.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\document_storage.cpython-311.pyc",
+      "api\\__pycache__\\knowledge_base.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\knowledge_base.cpython-311.pyc",
+      "api\\__pycache__\\llm_client.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\llm_client.cpython-311.pyc",
+      "api\\__pycache__\\main.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\main.cpython-311.pyc",
+      "api\\__pycache__\\migrations.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\migrations.cpython-311.pyc",
+      "api\\__pycache__\\models.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\models.cpython-311.pyc",
+      "api\\__pycache__\\models.cpython-314.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\models.cpython-314.pyc",
+      "api\\__pycache__\\monitoring.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\monitoring.cpython-311.pyc",
+      "api\\__pycache__\\partial_results.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\partial_results.cpython-311.pyc",
+      "api\\__pycache__\\prompt_templates.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\prompt_templates.cpython-311.pyc",
+      "api\\__pycache__\\pr_analyzer.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\pr_analyzer.cpython-311.pyc",
+      "api\\__pycache__\\rag.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\rag.cpython-311.pyc",
+      "api\\__pycache__\\rag.cpython-314.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\rag.cpython-314.pyc",
+      "api\\__pycache__\\repo_ingest.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\repo_ingest.cpython-311.pyc",
+      "api\\__pycache__\\repo_ingest.cpython-314.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\repo_ingest.cpython-314.pyc",
+      "api\\__pycache__\\resource_manager.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\resource_manager.cpython-311.pyc",
+      "api\\__pycache__\\resource_manager.cpython-314.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\resource_manager.cpython-314.pyc",
+      "api\\__pycache__\\security_content_generators.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\security_content_generators.cpython-311.pyc",
+      "api\\__pycache__\\security_model.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\security_model.cpython-311.pyc",
+      "api\\__pycache__\\security_model.cpython-314.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\security_model.cpython-314.pyc",
+      "api\\__pycache__\\security_wiki_generator.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\security_wiki_generator.cpython-311.pyc",
+      "api\\__pycache__\\smart_workflow.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\smart_workflow.cpython-311.pyc",
+      "api\\__pycache__\\storage_manager.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\storage_manager.cpython-311.pyc",
+      "api\\__pycache__\\threat_analysis_provider.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\threat_analysis_provider.cpython-311.pyc",
+      "api\\__pycache__\\threat_docs.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\threat_docs.cpython-311.pyc",
+      "api\\__pycache__\\user_utils.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\user_utils.cpython-311.pyc",
+      "api\\__pycache__\\wiki_error_handler.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\wiki_error_handler.cpython-311.pyc",
+      "api\\__pycache__\\wiki_migration.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\wiki_migration.cpython-311.pyc",
+      "api\\__pycache__\\wiki_storage.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\wiki_storage.cpython-311.pyc",
+      "api\\__pycache__\\__init__.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\__init__.cpython-311.pyc",
+      "api\\__pycache__\\__init__.cpython-314.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\api\\__pycache__\\__init__.cpython-314.pyc",
+      "__pycache__\\cleanup_utils.cpython-311.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\__pycache__\\cleanup_utils.cpython-311.pyc",
+      "__pycache__\\test_security_model.cpython-314-pytest-9.0.2.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\__pycache__\\test_security_model.cpython-314-pytest-9.0.2.pyc",
+      "__pycache__\\test_threat_analysis_provider.cpython-311-pytest-9.0.2.pyc": "C:\\Users\\LENOVO\\Desktop\\ThreatLens\\.cleanup_backups\\cleanup_temporary_development_files_1768125293_2f2a5b80\\__pycache__\\test_threat_analysis_provider.cpython-311-pytest-9.0.2.pyc"
+    }
+  }
+}

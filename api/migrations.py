@@ -446,6 +446,71 @@ class MigrationManager:
                     DROP TRIGGER IF EXISTS sync_threat_to_security_update;
                     DROP TABLE IF EXISTS data_validation_rules;
                 """
+            ),
+            
+            # Migration 12: Security Wiki Storage
+            Migration(
+                version=12,
+                description="Add security wiki storage tables for consolidated documentation",
+                up_sql="""
+                    CREATE TABLE IF NOT EXISTS security_wikis (
+                        id TEXT PRIMARY KEY,
+                        repo_id TEXT,
+                        title TEXT,
+                        sections TEXT,  -- JSON serialized wiki sections
+                        cross_references TEXT,  -- JSON serialized cross-references
+                        search_index TEXT,  -- JSON serialized search index
+                        metadata TEXT,  -- JSON serialized metadata
+                        created_at TIMESTAMP,
+                        updated_at TIMESTAMP,
+                        FOREIGN KEY (repo_id) REFERENCES repositories (id)
+                    );
+                    
+                    CREATE INDEX IF NOT EXISTS idx_security_wikis_repo ON security_wikis(repo_id);
+                    CREATE INDEX IF NOT EXISTS idx_security_wikis_created ON security_wikis(created_at);
+                    CREATE INDEX IF NOT EXISTS idx_security_wikis_updated ON security_wikis(updated_at);
+                """,
+                down_sql="""
+                    DROP INDEX IF EXISTS idx_security_wikis_repo;
+                    DROP INDEX IF EXISTS idx_security_wikis_created;
+                    DROP INDEX IF EXISTS idx_security_wikis_updated;
+                    DROP TABLE IF EXISTS security_wikis;
+                """
+            ),
+            
+            # Migration 13: User Wiki Collection (Phase 1 MVP)
+            Migration(
+                version=13,
+                description="Add user wiki collection for personal dashboard",
+                up_sql="""
+                    CREATE TABLE IF NOT EXISTS user_wikis (
+                        id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL,
+                        repo_id TEXT NOT NULL,
+                        repository_url TEXT NOT NULL,
+                        repository_name TEXT NOT NULL,
+                        wiki_id TEXT,  -- Reference to security_wikis.id
+                        analysis_status TEXT DEFAULT 'pending',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP,
+                        metadata TEXT,  -- JSON for additional data
+                        FOREIGN KEY (repo_id) REFERENCES repositories (id),
+                        FOREIGN KEY (wiki_id) REFERENCES security_wikis (id),
+                        UNIQUE(user_id, repository_url)
+                    );
+                    
+                    CREATE INDEX IF NOT EXISTS idx_user_wikis_user_id ON user_wikis(user_id);
+                    CREATE INDEX IF NOT EXISTS idx_user_wikis_repo_id ON user_wikis(repo_id);
+                    CREATE INDEX IF NOT EXISTS idx_user_wikis_status ON user_wikis(analysis_status);
+                    CREATE INDEX IF NOT EXISTS idx_user_wikis_created ON user_wikis(created_at);
+                """,
+                down_sql="""
+                    DROP INDEX IF EXISTS idx_user_wikis_user_id;
+                    DROP INDEX IF EXISTS idx_user_wikis_repo_id;
+                    DROP INDEX IF EXISTS idx_user_wikis_status;
+                    DROP INDEX IF EXISTS idx_user_wikis_created;
+                    DROP TABLE IF EXISTS user_wikis;
+                """
             )
         ]
     

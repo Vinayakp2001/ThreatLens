@@ -17,6 +17,25 @@ from api.migrations import MigrationManager
 
 logger = logging.getLogger(__name__)
 
+# Global database manager instance
+_db_manager = None
+
+def init_database(db_path: Optional[str] = None) -> 'DatabaseManager':
+    """Initialize the global database manager"""
+    global _db_manager
+    if _db_manager is None:
+        _db_manager = DatabaseManager(db_path)
+    return _db_manager
+
+def get_db_session():
+    """Get a database connection session"""
+    global _db_manager
+    if _db_manager is None:
+        _db_manager = DatabaseManager()
+    
+    # Return a context manager for database connections
+    return sqlite3.connect(_db_manager.db_path)
+
 
 class DatabaseMigration:
     """Database migration management"""
@@ -154,6 +173,28 @@ class DatabaseMigration:
                 CREATE INDEX IF NOT EXISTS idx_pr_analyses_pr_id ON pr_analyses(pr_id);
                 CREATE INDEX IF NOT EXISTS idx_pr_analyses_risk ON pr_analyses(risk_level);
             """
+        },
+        {
+            "version": 4,
+            "description": "Add security wikis support for consolidated documentation",
+            "sql": """
+                CREATE TABLE IF NOT EXISTS security_wikis (
+                    id TEXT PRIMARY KEY,
+                    repo_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    sections TEXT NOT NULL,  -- JSON serialized sections
+                    cross_references TEXT,   -- JSON serialized cross-references
+                    search_index TEXT,       -- JSON serialized search index
+                    metadata TEXT,           -- JSON serialized metadata
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT,
+                    FOREIGN KEY (repo_id) REFERENCES repositories (id)
+                );
+                
+                CREATE INDEX IF NOT EXISTS idx_security_wikis_repo ON security_wikis(repo_id);
+                CREATE INDEX IF NOT EXISTS idx_security_wikis_created ON security_wikis(created_at);
+                CREATE INDEX IF NOT EXISTS idx_security_wikis_updated ON security_wikis(updated_at);
+            """
         }
     ]
     
@@ -169,8 +210,15 @@ class DatabaseManager:
     """Enhanced SQLite database manager with migrations and integrity checks"""
     
     def __init__(self, db_path: Optional[str] = None):
-        self.db_path = db_path or settings.database_path
-        self.backup_dir = Path(settings.storage_base_path) / "db_backups"
+        # Handle case where settings might not be loaded yet
+        try:
+            self.db_path = db_path or (settings.database_path if settings else "./storage/threat_modeling.db")
+            storage_base = settings.storage_base_path if settings else "./storage"
+        except (AttributeError, TypeError):
+            self.db_path = db_path or "./storage/threat_modeling.db"
+            storage_base = "./storage"
+        
+        self.backup_dir = Path(storage_base) / "db_backups"
         self.backup_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize database
@@ -322,7 +370,18 @@ class DatabaseManager:
         }
         
         try:
+            # First, clean up orphaned records in a transaction
             with sqlite3.connect(self.db_path) as conn:
+                # Clean up orphaned user_wikis (the main issue we're seeing)
+                cursor = conn.execute("""
+                    DELETE FROM user_wikis 
+                    WHERE repo_id NOT IN (SELECT id FROM repositories)
+                """)
+                orphaned_wikis_removed = cursor.rowcount
+                
+                if orphaned_wikis_removed > 0:
+                    repair_result["operations"].append(f"Removed {orphaned_wikis_removed} orphaned user wikis")
+                
                 # Clean up orphaned documents
                 cursor = conn.execute("""
                     DELETE FROM threat_documents 
@@ -343,21 +402,46 @@ class DatabaseManager:
                 if orphaned_refs_removed > 0:
                     repair_result["operations"].append(f"Removed {orphaned_refs_removed} orphaned code references")
                 
-                # Vacuum database to reclaim space
+                # Clean up orphaned security documents
+                cursor = conn.execute("""
+                    DELETE FROM security_documents 
+                    WHERE repo_id NOT IN (SELECT id FROM repositories)
+                """)
+                orphaned_security_docs_removed = cursor.rowcount
+                
+                if orphaned_security_docs_removed > 0:
+                    repair_result["operations"].append(f"Removed {orphaned_security_docs_removed} orphaned security documents")
+                
+                # Clean up orphaned PR analyses
+                cursor = conn.execute("""
+                    DELETE FROM pr_analyses 
+                    WHERE repo_id NOT IN (SELECT id FROM repositories)
+                """)
+                orphaned_pr_analyses_removed = cursor.rowcount
+                
+                if orphaned_pr_analyses_removed > 0:
+                    repair_result["operations"].append(f"Removed {orphaned_pr_analyses_removed} orphaned PR analyses")
+                
+                conn.commit()
+            
+            # Now run VACUUM and ANALYZE outside of transaction
+            conn = sqlite3.connect(self.db_path)
+            try:
                 conn.execute("VACUUM")
                 repair_result["operations"].append("Database vacuumed")
                 
-                # Analyze tables for query optimization
                 conn.execute("ANALYZE")
                 repair_result["operations"].append("Database statistics updated")
-                
-                conn.commit()
+            finally:
+                conn.close()
                 
         except Exception as e:
             repair_result["success"] = False
             repair_result["errors"].append(str(e))
             logger.error(f"Database repair failed: {e}")
         
+        repair_result["completed_at"] = datetime.now().isoformat()
+        return repair_result
         repair_result["completed_at"] = datetime.now().isoformat()
         return repair_result
     
@@ -1673,6 +1757,198 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error checking repo analysis: {e}")
             return False
+    
+    def execute_query(self, query: str, params: tuple = ()) -> bool:
+        """Execute a query and return success status"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(query, params)
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Query execution failed: {e}")
+            return False
+    
+    def fetch_one(self, query: str, params: tuple = ()) -> Optional[Dict[str, Any]]:
+        """Fetch one row from query"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute(query, params)
+                result = cursor.fetchone()
+                return dict(result) if result else None
+        except Exception as e:
+            logger.error(f"Fetch one failed: {e}")
+            return None
+    
+    def fetch_all(self, query: str, params: tuple = ()) -> List[Dict[str, Any]]:
+        """Fetch all rows from query"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute(query, params)
+                results = cursor.fetchall()
+                return [dict(row) for row in results]
+        except Exception as e:
+            logger.error(f"Fetch all failed: {e}")
+            return []
+    
+    def close(self):
+        """Close database connections (placeholder for connection pooling)"""
+        # In SQLite, connections are automatically closed when context managers exit
+        # This method is here for compatibility with connection pooling implementations
+        pass
+    
+    # User Wiki Management Methods (Phase 1 MVP)
+    
+    def save_user_wiki(self, user_wiki: 'UserWiki') -> bool:
+        """Save user wiki entry to database"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("""
+                    INSERT OR REPLACE INTO user_wikis 
+                    (id, user_id, repo_id, repository_url, repository_name, 
+                     wiki_id, analysis_status, created_at, updated_at, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    user_wiki.id,
+                    user_wiki.user_id,
+                    user_wiki.repo_id,
+                    user_wiki.repository_url,
+                    user_wiki.repository_name,
+                    user_wiki.wiki_id,
+                    user_wiki.analysis_status,
+                    user_wiki.created_at.isoformat(),
+                    user_wiki.updated_at.isoformat() if user_wiki.updated_at else None,
+                    json.dumps(user_wiki.metadata)
+                ))
+                conn.commit()
+                logger.info(f"Saved user wiki: {user_wiki.id} for user: {user_wiki.user_id}")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to save user wiki {user_wiki.id}: {e}")
+            return False
+    
+    def get_user_wikis(self, user_id: str) -> List['UserWiki']:
+        """Get all wikis for a user"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute("""
+                    SELECT * FROM user_wikis 
+                    WHERE user_id = ? 
+                    ORDER BY created_at DESC
+                """, (user_id,))
+                
+                results = []
+                for row in cursor.fetchall():
+                    # Import here to avoid circular imports
+                    from api.models import UserWiki
+                    
+                    user_wiki = UserWiki(
+                        id=row['id'],
+                        user_id=row['user_id'],
+                        repo_id=row['repo_id'],
+                        repository_url=row['repository_url'],
+                        repository_name=row['repository_name'],
+                        wiki_id=row['wiki_id'],
+                        analysis_status=row['analysis_status'],
+                        created_at=datetime.fromisoformat(row['created_at']),
+                        updated_at=datetime.fromisoformat(row['updated_at']) if row['updated_at'] else None,
+                        metadata=json.loads(row['metadata']) if row['metadata'] else {}
+                    )
+                    results.append(user_wiki)
+                
+                return results
+        except Exception as e:
+            logger.error(f"Failed to get user wikis for user {user_id}: {e}")
+            return []
+    
+    def get_user_wiki(self, user_id: str, wiki_id: str) -> Optional['UserWiki']:
+        """Get specific user wiki by ID"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute("""
+                    SELECT * FROM user_wikis 
+                    WHERE user_id = ? AND id = ?
+                """, (user_id, wiki_id))
+                
+                row = cursor.fetchone()
+                if not row:
+                    return None
+                
+                # Import here to avoid circular imports
+                from api.models import UserWiki
+                
+                return UserWiki(
+                    id=row['id'],
+                    user_id=row['user_id'],
+                    repo_id=row['repo_id'],
+                    repository_url=row['repository_url'],
+                    repository_name=row['repository_name'],
+                    wiki_id=row['wiki_id'],
+                    analysis_status=row['analysis_status'],
+                    created_at=datetime.fromisoformat(row['created_at']),
+                    updated_at=datetime.fromisoformat(row['updated_at']) if row['updated_at'] else None,
+                    metadata=json.loads(row['metadata']) if row['metadata'] else {}
+                )
+        except Exception as e:
+            logger.error(f"Failed to get user wiki {wiki_id} for user {user_id}: {e}")
+            return None
+    
+    def delete_user_wiki(self, user_id: str, wiki_id: str) -> bool:
+        """Delete user wiki entry"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute("""
+                    DELETE FROM user_wikis 
+                    WHERE user_id = ? AND id = ?
+                """, (user_id, wiki_id))
+                
+                if cursor.rowcount > 0:
+                    conn.commit()
+                    logger.info(f"Deleted user wiki: {wiki_id} for user: {user_id}")
+                    return True
+                else:
+                    logger.warning(f"No user wiki found to delete: {wiki_id} for user: {user_id}")
+                    return False
+        except Exception as e:
+            logger.error(f"Failed to delete user wiki {wiki_id} for user {user_id}: {e}")
+            return False
+    
+    def check_user_wiki_exists(self, user_id: str, repository_url: str) -> Optional['UserWiki']:
+        """Check if user already has a wiki for this repository"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute("""
+                    SELECT * FROM user_wikis 
+                    WHERE user_id = ? AND repository_url = ?
+                """, (user_id, repository_url))
+                
+                row = cursor.fetchone()
+                if not row:
+                    return None
+                
+                # Import here to avoid circular imports
+                from api.models import UserWiki
+                
+                return UserWiki(
+                    id=row['id'],
+                    user_id=row['user_id'],
+                    repo_id=row['repo_id'],
+                    repository_url=row['repository_url'],
+                    repository_name=row['repository_name'],
+                    wiki_id=row['wiki_id'],
+                    analysis_status=row['analysis_status'],
+                    created_at=datetime.fromisoformat(row['created_at']),
+                    updated_at=datetime.fromisoformat(row['updated_at']) if row['updated_at'] else None,
+                    metadata=json.loads(row['metadata']) if row['metadata'] else {}
+                )
+        except Exception as e:
+            logger.error(f"Failed to check user wiki exists for {repository_url}: {e}")
+            return None
 
 
 # Global database manager instance

@@ -13,6 +13,11 @@ faiss-cpu==1.13.2  # Primary CPU version for reliability
 # faiss-gpu==1.13.2  # Optional GPU version (install separately if needed)
 numpy>=1.26.4
 
+# Local LLM Support - Hugging Face Transformers
+transformers==4.36.2
+torch>=2.1.0
+accelerate==0.25.0
+
 # Lightweight models for GPU acceleration
 # torch  # Will use existing installation
 # accelerate==0.25.0  # For model optimization
@@ -47,6 +52,14 @@ typing-extensions>=4.11.0
 
 # Production dependencies (optional)
 # gunicorn==21.2.0  # For production deployment
-# prometheus-client==0.19.0  # For metrics# CLI
- framework
+# prometheus-client==0.19.0  # For metrics
+# CLI framework
 click==8.1.7
+
+# Security dependencies for enhanced data security and validation
+cryptography>=41.0.0
+PyJWT==2.8.0
+pyotp==2.9.0
+qrcode[pil]==7.4.2
+bleach==6.1.0
+bcrypt==4.1.2

@@ -1,24 +1,29 @@
 """
 Security-focused content generators for comprehensive security analysis
 Replaces rigid threat document templates with flexible, DeepWiki-style content generation
+Uses task-effectiveness routing for optimal model selection
 """
 import logging
 from typing import List, Dict, Any, Optional
 
 from .models import SecurityModel, Component, Flow, DataStore
-from .llm_client import LLMManager
+from .task_llm_router import get_task_router, TaskType
 
 
 logger = logging.getLogger(__name__)
+DEBUG_ANALYSIS = logging.getLogger('DEBUG_ANALYSIS')
 
 
 class SecurityContentGenerators:
     """
     Content generators for different aspects of security analysis
-    Each generator focuses on a specific security domain
+    Each generator focuses on a specific security domain with task-optimized routing
     """
     
     def __init__(self):
+        self.task_router = get_task_router()
+        # Import here to avoid circular imports
+        from .llm_client import LLMManager
         self.llm_manager = LLMManager()
     
     async def generate_security_overview(self, security_model: SecurityModel) -> str:
@@ -85,15 +90,14 @@ Create a comprehensive Security Overview that covers:
 Format as comprehensive markdown documentation with clear sections and actionable insights."""
         
         try:
-            response = await self.llm_manager.generate_completion(
+            response_content, metadata = await self.task_router.route_task(
+                task_type=TaskType.SECURITY_OVERVIEW,
                 prompt=prompt,
-                system_prompt=self._get_security_analysis_system_prompt(),
-                temperature=0.3,
-                max_tokens=4000
+                system_prompt=self._get_security_analysis_system_prompt()
             )
-            return response.content
+            return response_content
         except Exception as e:
-            logger.error(f"Failed to generate security overview: {e}")
+            DEBUG_ANALYSIS.error(f"Failed to generate security overview: {e}")
             return f"# Security Overview\n\nError generating security overview: {str(e)}"
     
     async def generate_authentication_analysis(self, security_model: SecurityModel) -> str:

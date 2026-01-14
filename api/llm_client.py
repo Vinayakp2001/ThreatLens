@@ -28,7 +28,16 @@ try:
 except ImportError:
     ANTHROPIC_AVAILABLE = False
 
+# Hugging Face transformers support
+try:
+    from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+    import torch
+    HUGGINGFACE_AVAILABLE = True
+except ImportError:
+    HUGGINGFACE_AVAILABLE = False
+
 from .config import settings
+from .cost_tracker import cost_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +100,37 @@ class LLMManager:
             self.client = genai.GenerativeModel(settings.google_model)
             self.model = settings.google_model
             
+        elif self.provider == "huggingface" and HUGGINGFACE_AVAILABLE:
+            # Initialize local Hugging Face model
+            self.model = getattr(settings, 'huggingface_model', 'microsoft/DialoGPT-medium')
+            device = "cuda" if torch.cuda.is_available() and settings.enable_gpu_acceleration else "cpu"
+            
+            try:
+                self.client = pipeline(
+                    "text-generation",
+                    model=self.model,
+                    tokenizer=self.model,
+                    device=0 if device == "cuda" else -1,
+                    torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+                    trust_remote_code=True
+                )
+                logger.info(f"Initialized Hugging Face model: {self.model} on {device}")
+            except Exception as e:
+                logger.error(f"Failed to initialize Hugging Face model: {e}")
+                # Fallback to a smaller model
+                try:
+                    self.model = "microsoft/DialoGPT-small"
+                    self.client = pipeline(
+                        "text-generation",
+                        model=self.model,
+                        device=-1,  # Force CPU for fallback
+                        torch_dtype=torch.float32
+                    )
+                    logger.info(f"Fallback to smaller model: {self.model} on CPU")
+                except Exception as fallback_error:
+                    logger.error(f"Fallback model also failed: {fallback_error}")
+                    raise
+            
         else:
             raise ValueError(f"Unsupported or unavailable LLM provider: {self.provider}")
         
@@ -105,25 +145,55 @@ class LLMManager:
         prompt: str,
         system_prompt: Optional[str] = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None
+        max_tokens: Optional[int] = None,
+        operation: str = "completion",
+        repository: Optional[str] = None
     ) -> LLMResponse:
         """Generate completion using the configured LLM provider"""
         start_time = time.time()
+        success = False
+        error_msg = None
+        response = None
         
         try:
             if self.provider == "openai":
-                return await self._openai_completion(prompt, system_prompt, temperature, max_tokens)
+                response = await self._openai_completion(prompt, system_prompt, temperature, max_tokens)
             elif self.provider == "anthropic":
-                return await self._anthropic_completion(prompt, system_prompt, temperature, max_tokens)
+                response = await self._anthropic_completion(prompt, system_prompt, temperature, max_tokens)
             elif self.provider == "google":
-                return await self._google_completion(prompt, system_prompt, temperature, max_tokens)
+                response = await self._google_completion(prompt, system_prompt, temperature, max_tokens)
+            elif self.provider == "huggingface":
+                response = await self._huggingface_completion(prompt, system_prompt, temperature, max_tokens)
             else:
                 raise LLMError(f"Unsupported provider: {self.provider}")
+            
+            success = True
+            return response
                 
         except Exception as e:
+            error_msg = str(e)
             response_time = time.time() - start_time
             logger.error(f"LLM completion failed after {response_time:.2f}s: {e}")
             raise LLMError(f"Completion failed: {e}")
+        
+        finally:
+            # Track cost regardless of success/failure
+            if response:
+                input_tokens = response.usage.get("input_tokens", 0) or response.usage.get("prompt_tokens", 0)
+                output_tokens = response.usage.get("output_tokens", 0) or response.usage.get("completion_tokens", 0)
+                duration_ms = response.response_time * 1000
+                
+                cost_tracker.record_request(
+                    provider=self.provider,
+                    model=self.model,
+                    operation=operation,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    duration_ms=duration_ms,
+                    repository=repository,
+                    success=success,
+                    error=error_msg
+                )
     
     async def _openai_completion(self, prompt: str, system_prompt: Optional[str], temperature: float, max_tokens: Optional[int]) -> LLMResponse:
         """OpenAI completion"""
@@ -292,6 +362,49 @@ class LLMManager:
             
             raise LLMError(f"Google Gemini API error: {str(e)}")
     
+    async def _huggingface_completion(self, prompt: str, system_prompt: Optional[str], temperature: float, max_tokens: Optional[int]) -> LLMResponse:
+        """Hugging Face local model completion"""
+        start_time = time.time()
+        
+        try:
+            # Combine system and user prompts
+            if system_prompt:
+                full_prompt = f"{system_prompt}\n\nUser: {prompt}\nAssistant:"
+            else:
+                full_prompt = f"User: {prompt}\nAssistant:"
+            
+            # Generate response using the pipeline
+            response = await asyncio.to_thread(
+                self.client,
+                full_prompt,
+                max_length=max_tokens or 1000,
+                temperature=temperature,
+                do_sample=True,
+                pad_token_id=self.client.tokenizer.eos_token_id
+            )
+            
+            response_time = time.time() - start_time
+            
+            # Extract generated text
+            generated_text = response[0]['generated_text']
+            
+            # Remove the prompt from the response
+            if full_prompt in generated_text:
+                generated_text = generated_text.replace(full_prompt, "").strip()
+            
+            return LLMResponse(
+                content=generated_text,
+                usage={"input_tokens": len(full_prompt.split()), "output_tokens": len(generated_text.split())},
+                model=self.model,
+                finish_reason="stop",
+                response_time=response_time
+            )
+            
+        except Exception as e:
+            response_time = time.time() - start_time
+            logger.error(f"Hugging Face completion failed: {str(e)}")
+            raise LLMError(f"Hugging Face API error: {str(e)}")
+    
     def validate_configuration(self) -> bool:
         """Validate LLM configuration"""
         try:
@@ -301,6 +414,8 @@ class LLMManager:
                 return bool(settings.anthropic_api_key and ANTHROPIC_AVAILABLE)
             elif self.provider == "google":
                 return bool(settings.google_api_key and GOOGLE_AVAILABLE)
+            elif self.provider == "huggingface":
+                return HUGGINGFACE_AVAILABLE
             return False
         except Exception:
             return False

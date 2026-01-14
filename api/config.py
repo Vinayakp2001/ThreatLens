@@ -422,6 +422,16 @@ class Settings(BaseSettings):
     google_api_key: Optional[SecretStr] = Field(default=None, description="Google AI API key")
     google_model: str = Field(default="gemini-1.5-pro", description="Google Gemini model name")
     
+    # Hugging Face Configuration
+    huggingface_model: str = Field(default="microsoft/DialoGPT-medium", description="Hugging Face model name")
+    huggingface_cache_dir: Optional[str] = Field(default="./models", description="Hugging Face model cache directory")
+    
+    # Task Routing Configuration
+    enable_task_routing: bool = Field(default=True, description="Enable task-based LLM routing")
+    default_simple_provider: str = Field(default="huggingface", description="Default provider for simple tasks")
+    default_complex_provider: str = Field(default="openai", description="Default provider for complex tasks")
+    cost_optimization_mode: str = Field(default="balanced", description="Cost optimization mode: aggressive, balanced, quality")
+    
     # GitHub API Configuration
     github_token: Optional[SecretStr] = Field(default=None, description="GitHub personal access token for PR analysis")
     github_api_base_url: str = Field(default="https://api.github.com", description="GitHub API base URL")
@@ -451,7 +461,7 @@ class Settings(BaseSettings):
     maintenance_interval_hours: int = Field(default=24, ge=1, description="Maintenance interval in hours")
     
     # Repository Analysis Configuration
-    max_repo_size_mb: int = Field(default=100, ge=1, le=10000, description="Maximum repository size in MB")
+    max_repo_size_mb: int = Field(default=500, ge=1, le=10000, description="Maximum repository size in MB")
     analysis_timeout_minutes: int = Field(default=10, ge=1, le=120, description="Analysis timeout in minutes")
     max_concurrent_analyses: int = Field(default=5, ge=1, le=50, description="Maximum concurrent analyses")
     
@@ -603,6 +613,8 @@ class Settings(BaseSettings):
             return self.google_api_key is not None
         elif self.llm_provider == LLMProvider.ANTHROPIC:
             return self.anthropic_api_key is not None
+        elif self.llm_provider == LLMProvider.HUGGINGFACE:
+            return True  # No API key needed for local models
         return False
     
     def check_gpu_availability(self) -> bool:

@@ -17,6 +17,7 @@ from .config import settings
 from .storage_manager import storage_manager
 
 logger = logging.getLogger(__name__)
+DEBUG_ANALYSIS = logging.getLogger('DEBUG_ANALYSIS')
 
 
 class RepoIngestorError(Exception):
@@ -386,7 +387,16 @@ class RepoIngestor:
             
             if result.returncode != 0:
                 error_msg = result.stderr.strip()
-                self._handle_git_error(error_msg, repo_url, validation_result)
+                # Check if this is a Windows checkout failure (clone succeeded but checkout failed)
+                if any(phrase in error_msg.lower() for phrase in [
+                    'clone succeeded, but checkout failed', 'unable to write file',
+                    'filename too long', 'path too long'
+                ]):
+                    # Log warning but continue - the repository was cloned successfully
+                    logger.warning(f"Windows checkout issue (continuing with analysis): {error_msg}")
+                else:
+                    # Handle other Git errors normally
+                    self._handle_git_error(error_msg, repo_url, validation_result)
             
             # Verify clone was successful
             if not local_path.exists() or not (local_path / ".git").exists():
@@ -596,6 +606,19 @@ class RepoIngestor:
         ]):
             raise NetworkError(
                 f"SSL/TLS error while accessing repository: {error_msg}",
+                {
+                    "repo_url": repo_url,
+                    "git_error": error_msg,
+                    "suggestion": "Check SSL certificates or try with --no-verify-ssl-cert flag"
+                }
+            )
+        
+        # Repository too large
+        elif any(phrase in error_lower for phrase in [
+            'repository too large', 'size limit', 'quota exceeded'
+        ]):
+            raise RepositoryTooLargeError(
+                f"Repository exceeds size limits: {error_msg}",
                 {
                     "repo_url": repo_url,
                     "git_error": error_msg,

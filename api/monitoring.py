@@ -104,8 +104,65 @@ class MetricsCollector:
                 self.gauges[name] = value
             elif metric_type == MetricType.HISTOGRAM:
                 self.histograms[name].append(value)
-                # Keep only recent values for histograms
-                if len(self.histograms[name]) > 1000:
+            elif metric_type == MetricType.TIMER:
+                self.timers[name].append(value)
+    
+    def record_webhook_event(self, event_type: str, repository: str, processing_time_ms: float):
+        """Record webhook event metrics"""
+        self.record_metric(
+            "webhook_events_total",
+            1,
+            MetricType.COUNTER,
+            labels={"event_type": event_type, "repository": repository}
+        )
+        
+        self.record_metric(
+            "webhook_processing_time_ms",
+            processing_time_ms,
+            MetricType.HISTOGRAM,
+            labels={"event_type": event_type}
+        )
+    
+    def record_security_gate_validation(self, repository_id: str, status: str, 
+                                      security_score: float, environment: str):
+        """Record security gate validation metrics"""
+        self.record_metric(
+            "security_gate_validations_total",
+            1,
+            MetricType.COUNTER,
+            labels={"status": status, "environment": environment}
+        )
+        
+        self.record_metric(
+            "security_gate_score",
+            security_score,
+            MetricType.GAUGE,
+            labels={"repository_id": repository_id, "environment": environment}
+        )
+    
+    def record_cicd_integration_event(self, event_type: str, success: bool, duration_ms: float):
+        """Record CI/CD integration event metrics"""
+        self.record_metric(
+            "cicd_integration_events_total",
+            1,
+            MetricType.COUNTER,
+            labels={"event_type": event_type, "success": str(success)}
+        )
+        
+        self.record_metric(
+            "cicd_integration_duration_ms",
+            duration_ms,
+            MetricType.HISTOGRAM,
+            labels={"event_type": event_type}
+        )
+        if metric_type == MetricType.COUNTER:
+            self.counters[name] += value
+        elif metric_type == MetricType.GAUGE:
+            self.gauges[name] = value
+        elif metric_type == MetricType.HISTOGRAM:
+            self.histograms[name].append(value)
+            # Keep only recent values for histograms
+            if len(self.histograms[name]) > 1000:
                     self.histograms[name] = self.histograms[name][-1000:]
             elif metric_type == MetricType.TIMER:
                 self.timers[name].append(value)

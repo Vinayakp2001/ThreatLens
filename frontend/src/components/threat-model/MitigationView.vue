@@ -17,7 +17,7 @@
       </div>
 
       <!-- Mitigation Content -->
-      <div v-else-if="mitigations.length > 0 || threats.length > 0" class="space-y-8">
+      <div v-else-if="effectiveMitigations.length > 0 || effectiveThreats.length > 0" class="space-y-8">
         <!-- Mitigation Summary -->
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
@@ -26,7 +26,7 @@
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div class="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
               <div class="text-2xl font-bold text-green-600 dark:text-green-400">
-                {{ mitigations.length }}
+                {{ effectiveMitigations.length }}
               </div>
               <div class="text-sm text-gray-600 dark:text-gray-400">Total Mitigations</div>
             </div>
@@ -334,9 +334,19 @@ interface Mitigation {
   priority: string
 }
 
+interface WikiSection {
+  id: string
+  title: string
+  content: string
+  security_findings: any[]
+  recommendations: string[]
+  owasp_mappings: string[]
+}
+
 interface Props {
-  threats: Threat[]
-  mitigations: Mitigation[]
+  threats?: Threat[]
+  mitigations?: Mitigation[]
+  wikiSection?: WikiSection
   loading?: boolean
 }
 
@@ -346,26 +356,58 @@ const props = withDefaults(defineProps<Props>(), {
   loading: false
 })
 
+// Extract mitigations from wiki section if provided
+const effectiveMitigations = computed(() => {
+  if (props.wikiSection?.recommendations) {
+    // Convert recommendations to mitigation format
+    return props.wikiSection.recommendations.map((rec: string, index: number) => ({
+      id: `rec-${index}`,
+      title: `Recommendation ${index + 1}`,
+      description: rec,
+      category: 'security_controls',
+      owasp_cheatsheet_ids: props.wikiSection?.owasp_mappings || [],
+      asvs_references: [],
+      implementation_guidance: rec,
+      priority: 'medium'
+    }))
+  }
+  return props.mitigations
+})
+
+const effectiveThreats = computed(() => {
+  if (props.wikiSection?.security_findings) {
+    return props.wikiSection.security_findings.map((finding: any) => ({
+      id: finding.id || `finding-${Math.random()}`,
+      title: finding.type || 'Security Finding',
+      description: finding.description || '',
+      stride_category: finding.stride_category || 'Unknown',
+      risk_score: finding.severity === 'high' ? 8 : finding.severity === 'medium' ? 5 : 2,
+      mitigations: effectiveMitigations.value.map(m => m.id)
+    }))
+  }
+  return props.threats
+})
+
 // Computed properties
 const highPriorityMitigations = computed(() =>
-  props.mitigations.filter(m => m.priority?.toLowerCase() === 'high')
+  effectiveMitigations.value.filter(m => m.priority?.toLowerCase() === 'high')
 )
 
 const owaspReferences = computed(() => {
   const refs = new Set<string>()
-  props.mitigations.forEach(m => {
+  effectiveMitigations.value.forEach(m => {
     m.owasp_cheatsheet_ids?.forEach(ref => refs.add(ref))
   })
   return refs
 })
 
 const threatsWithMitigations = computed(() =>
-  props.threats.filter(t => t.mitigations?.length > 0)
+  effectiveThreats.value.filter(t => t.mitigations?.length > 0)
 )
 
 const mitigationsByCategory = computed(() => {
   const categories: Record<string, Mitigation[]> = {}
-  props.mitigations.forEach(mitigation => {
+  effectiveMitigations.value.forEach(mitigation => {
     const category = mitigation.category || 'uncategorized'
     if (!categories[category]) {
       categories[category] = []
@@ -376,7 +418,7 @@ const mitigationsByCategory = computed(() => {
 })
 
 const sortedMitigations = computed(() => {
-  return [...props.mitigations].sort((a, b) => {
+  return [...effectiveMitigations.value].sort((a, b) => {
     // Sort by priority first (High > Medium > Low)
     const priorityOrder = { 'high': 3, 'medium': 2, 'low': 1 }
     const aPriority = priorityOrder[a.priority?.toLowerCase() as keyof typeof priorityOrder] || 0
@@ -393,14 +435,14 @@ const sortedMitigations = computed(() => {
 
 // Methods
 const getThreatMitigations = (threatId: string) => {
-  const threat = props.threats.find(t => t.id === threatId)
+  const threat = effectiveThreats.value.find(t => t.id === threatId)
   if (!threat?.mitigations) return []
   
-  return props.mitigations.filter(m => threat.mitigations.includes(m.id))
+  return effectiveMitigations.value.filter(m => threat.mitigations.includes(m.id))
 }
 
 const getThreatsForMitigation = (mitigationId: string) => {
-  return props.threats.filter(t => t.mitigations?.includes(mitigationId))
+  return effectiveThreats.value.filter(t => t.mitigations?.includes(mitigationId))
 }
 
 // Utility functions

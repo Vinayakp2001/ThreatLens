@@ -1,0 +1,57 @@
+{
+  "timestamp": "2026-01-20T15:44:25.982992",
+  "summary": {
+    "total_tests": 7,
+    "passed_tests": 2,
+    "failed_tests": 5,
+    "success_rate": "28.6%",
+    "overall_success": false
+  },
+  "test_results": {
+    "chat_initialization": true,
+    "repository_context": true,
+    "owasp_questions": false,
+    "frontend_compatibility": false,
+    "error_handling": false,
+    "diagnostics": false,
+    "overall_success": false
+  },
+  "error_log": [
+    {
+      "test": "owasp_questions",
+      "error": "No response for question: What OWASP guidelines apply here?",
+      "timestamp": "2026-01-20T15:44:12.190966"
+    },
+    {
+      "test": "owasp_questions",
+      "error": "No response for question: What are the main security vulnerabilities in this repository?",
+      "timestamp": "2026-01-20T15:44:16.240682"
+    },
+    {
+      "test": "owasp_questions",
+      "error": "No response for question: How can I improve the security of this codebase?",
+      "timestamp": "2026-01-20T15:44:19.472559"
+    },
+    {
+      "test": "owasp_questions",
+      "error": "No response for question: What authentication best practices should I follow?",
+      "timestamp": "2026-01-20T15:44:23.580253"
+    },
+    {
+      "test": "owasp_questions",
+      "error": "No response for question: Are there any input validation issues?",
+      "timestamp": "2026-01-20T15:44:25.982992"
+    },
+    {
+      "test": "owasp_questions",
+      "error": "Success rate too low: 0.0% (0/5)",
+      "timestamp": "2026-01-20T15:44:25.982992"
+    }
+  ],
+  "recommendations": [
+    "Improve RAG system integration - check embeddings and search functionality",
+    "Fix frontend API compatibility - verify response data structures",
+    "Enhance error handling - add more graceful degradation",
+    "Improve error diagnostics - add more detailed logging"
+  ]
+}

@@ -563,6 +563,7 @@ class Settings(BaseSettings):
                 if not values.get(field):
                     raise ValueError(f"{field} is required when using Azure provider")
         
+        # For huggingface and other providers, no additional validation needed
         return values
     
     def _create_storage_directories(self):

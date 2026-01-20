@@ -48,6 +48,9 @@ The platform offers dual analysis modes: complete repository security assessment
 
 **Production-Ready Architecture**
 - RESTful API built with FastAPI
+- Professional PDF export functionality for complete security reports
+- Comprehensive security wiki generation with multiple sections
+- Export capabilities for sharing and compliance documentation
 - Modern Vue.js frontend with responsive design
 - SQLite database with comprehensive migration system
 - Docker containerization support

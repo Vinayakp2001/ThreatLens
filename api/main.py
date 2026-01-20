@@ -8,25 +8,44 @@ import traceback
 import uuid
 import sqlite3
 import json
+import time
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
-# Core imports
-from .config import settings
-from .database import init_database, get_db_session
-from .models import SecurityModel, UserWiki
-from .repo_ingest import RepoIngestor
-from .security_wiki_generator import SecurityWikiGenerator
-from .monitoring import HealthChecker
-
-# Routers
-from .cost_router import router as cost_router
+# Core imports - handle both direct execution and module imports
+try:
+    from .config import settings
+    from .database import init_database, get_db_session
+    from .models import SecurityModel, UserWiki
+    from .repo_ingest import RepoIngestor
+    from .security_wiki_generator import SecurityWikiGenerator
+    from .monitoring import HealthChecker
+    
+    # Routers
+    from .cost_router import router as cost_router
+    from .chat_router import router as chat_router
+except ImportError:
+    # Direct execution - use absolute imports
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    
+    from config import settings
+    from database import init_database, get_db_session
+    from models import SecurityModel, UserWiki
+    from repo_ingest import RepoIngestor
+    from security_wiki_generator import SecurityWikiGenerator
+    from monitoring import HealthChecker
+    
+    # Routers
+    from cost_router import router as cost_router
+    from chat_router import router as chat_router
 
 # Debug logging setup
 DEBUG_ANALYSIS = logging.getLogger('DEBUG_ANALYSIS')
@@ -103,6 +122,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(cost_router)
+app.include_router(chat_router)
 
 
 # Request/Response models
@@ -376,6 +396,7 @@ async def test_repo_analysis(request: AnalyzeRepoRequest):
 async def get_user_wikis(user_id: str):
     """Get all wikis for a user"""
     try:
+        start_time = time.time()
         DEBUG_ANALYSIS.info(f"Getting user wikis for user: {user_id}")
         
         from .database import _db_manager
@@ -397,8 +418,13 @@ async def get_user_wikis(user_id: str):
                 "metadata": wiki.metadata
             })
         
-        DEBUG_ANALYSIS.info(f"Found {len(wikis_data)} wikis for user {user_id}")
+        elapsed = time.time() - start_time
+        DEBUG_ANALYSIS.info(f"Found {len(wikis_data)} wikis for user {user_id} in {elapsed:.3f}s")
         return {"wikis": wikis_data}
+    
+    except Exception as e:
+        DEBUG_ANALYSIS.error(f"Error getting user wikis for {user_id}: {str(e)}")
+        return {"wikis": [], "error": str(e)}
         
     except Exception as e:
         DEBUG_ANALYSIS.error(f"Failed to get user wikis: {str(e)}")
@@ -457,15 +483,26 @@ async def get_wiki_by_repo_id(repo_id: str):
     try:
         DEBUG_ANALYSIS.info(f"Getting wiki by repo_id: {repo_id}")
         
-        from .database import _db_manager
+        from .database import _db_manager, init_database
+        
+        # Ensure database manager is initialized
+        if _db_manager is None:
+            DEBUG_ANALYSIS.info("Initializing database manager...")
+            db_manager = init_database()
+        else:
+            db_manager = _db_manager
+        
+        # Use the correct database path
+        db_path = "data/threatlens.db"
+        DEBUG_ANALYSIS.info(f"Using database path: {db_path}")
         
         # Find the wiki by repo_id
-        with sqlite3.connect(_db_manager.db_path) as conn:
+        with sqlite3.connect(db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute("""
-                SELECT uw.*, sw.sections as wiki_content
+                SELECT uw.*, sw.content as wiki_content, sw.title as wiki_title
                 FROM user_wikis uw
-                LEFT JOIN security_wikis sw ON uw.wiki_id = sw.id
+                LEFT JOIN security_wikis sw ON uw.repo_id = sw.repository_id
                 WHERE uw.repo_id = ?
                 ORDER BY uw.created_at DESC
                 LIMIT 1
@@ -482,8 +519,43 @@ async def get_wiki_by_repo_id(repo_id: str):
             if row['wiki_content']:
                 try:
                     # Try to parse as JSON first
-                    sections_data = json.loads(row['wiki_content'])
-                except (json.JSONDecodeError, TypeError):
+                    parsed_content = json.loads(row['wiki_content'])
+                    DEBUG_ANALYSIS.info(f"Successfully parsed JSON with {len(parsed_content)} sections: {list(parsed_content.keys())}")
+                    
+                    # Ensure each section has the required structure
+                    for section_id, section_data in parsed_content.items():
+                        if isinstance(section_data, dict):
+                            # Ensure all required fields exist
+                            sections_data[section_id] = {
+                                "id": section_data.get("id", section_id),
+                                "title": section_data.get("title", section_id.replace('_', ' ').title()),
+                                "content": section_data.get("content", ""),
+                                "subsections": section_data.get("subsections", []),
+                                "cross_references": section_data.get("cross_references", []),
+                                "owasp_mappings": section_data.get("owasp_mappings", []),
+                                "code_references": section_data.get("code_references", []),
+                                "security_findings": section_data.get("security_findings", []),
+                                "recommendations": section_data.get("recommendations", [])
+                            }
+                        else:
+                            # Handle case where section_data is just a string
+                            sections_data[section_id] = {
+                                "id": section_id,
+                                "title": section_id.replace('_', ' ').title(),
+                                "content": str(section_data),
+                                "subsections": [],
+                                "cross_references": [],
+                                "owasp_mappings": [],
+                                "code_references": [],
+                                "security_findings": [],
+                                "recommendations": []
+                            }
+                    
+                    DEBUG_ANALYSIS.info(f"Final sections_data has {len(sections_data)} sections: {list(sections_data.keys())}")
+                    
+                except (json.JSONDecodeError, TypeError) as e:
+                    DEBUG_ANALYSIS.error(f"JSON parsing failed: {e}")
+                    DEBUG_ANALYSIS.info(f"Content preview: {row['wiki_content'][:200]}...")
                     # If not JSON, create a default section with the content
                     sections_data = {
                         "overview": {
@@ -534,6 +606,50 @@ async def get_wiki_by_repo_id(repo_id: str):
     except Exception as e:
         DEBUG_ANALYSIS.error(f"Failed to get wiki by repo_id: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to get wiki by repo_id: {str(e)}")
+
+
+@app.get("/wiki/{repo_id}/export/pdf")
+async def export_wiki_pdf(repo_id: str):
+    """Export wiki as PDF"""
+    try:
+        DEBUG_ANALYSIS.info(f"Exporting wiki as PDF for repo: {repo_id}")
+        
+        from .simple_pdf_generator import SimplePDFGenerator
+        from .database import _db_manager
+        
+        # Generate PDF
+        pdf_generator = SimplePDFGenerator()
+        pdf_bytes = pdf_generator.generate_pdf(repo_id, _db_manager.db_path)
+        
+        # Get repository name for filename
+        with sqlite3.connect(_db_manager.db_path) as conn:
+            cursor = conn.execute("""
+                SELECT repository_name FROM user_wikis 
+                WHERE repo_id = ? 
+                ORDER BY created_at DESC 
+                LIMIT 1
+            """, (repo_id,))
+            row = cursor.fetchone()
+            repo_name = row[0] if row else "security-report"
+        
+        # Clean filename
+        safe_filename = "".join(c for c in repo_name if c.isalnum() or c in ('-', '_')).rstrip()
+        filename = f"{safe_filename}-security-report.pdf"
+        
+        DEBUG_ANALYSIS.info(f"Generated PDF for {repo_name}: {len(pdf_bytes)} bytes")
+        
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "Content-Length": str(len(pdf_bytes))
+            }
+        )
+        
+    except Exception as e:
+        DEBUG_ANALYSIS.error(f"Failed to export PDF: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to export PDF: {str(e)}")
 
 
 @app.delete("/api/user-wikis/{user_id}/{wiki_id}")

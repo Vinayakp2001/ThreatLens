@@ -12,9 +12,15 @@ from typing import Optional, Dict, Any, List, Tuple
 from urllib.parse import urlparse
 import logging
 
-from .models import RepoContext, StructureAnalysis
-from .config import settings
-from .storage_manager import storage_manager
+# Handle both relative and absolute imports
+try:
+    from .models import RepoContext, StructureAnalysis
+    from .config import settings
+    from .storage_manager import storage_manager
+except ImportError:
+    from models import RepoContext, StructureAnalysis
+    from config import settings
+    from storage_manager import storage_manager
 
 logger = logging.getLogger(__name__)
 DEBUG_ANALYSIS = logging.getLogger('DEBUG_ANALYSIS')

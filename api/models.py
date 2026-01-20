@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from enum import Enum
 from datetime import datetime
+from dataclasses import dataclass, field
 
 
 class ComponentType(str, Enum):
@@ -372,3 +373,42 @@ class UserWiki(BaseModel):
     def is_completed(self) -> bool:
         """Check if analysis is completed"""
         return self.analysis_status == "completed"
+
+
+# Chat System Models
+@dataclass
+class ChatMessage:
+    """Individual chat message"""
+    id: str
+    role: str  # 'user' or 'assistant'
+    content: str
+    timestamp: datetime
+    sources: List[Dict[str, Any]] = field(default_factory=list)
+
+@dataclass 
+class ChatSession:
+    """Chat session with conversation history"""
+    session_id: str
+    repo_id: str
+    user_id: str
+    created_at: datetime
+    messages: List[ChatMessage] = field(default_factory=list)
+    context: Dict[str, Any] = field(default_factory=dict)
+
+class ChatRequest(BaseModel):
+    """Request model for chat messages"""
+    message: str = Field(..., description="User message")
+    session_id: Optional[str] = Field(None, description="Existing session ID")
+
+class ChatResponse(BaseModel):
+    """Response model for chat messages"""
+    message: str = Field(..., description="AI response")
+    session_id: str = Field(..., description="Session ID")
+    sources: List[Dict[str, Any]] = Field(default_factory=list, description="Source documents")
+    timestamp: str = Field(..., description="Response timestamp")
+
+class ChatHistoryResponse(BaseModel):
+    """Response model for chat history"""
+    session_id: str = Field(..., description="Session ID")
+    messages: List[Dict[str, Any]] = Field(..., description="Chat messages")
+    repository_name: Optional[str] = Field(None, description="Repository name")

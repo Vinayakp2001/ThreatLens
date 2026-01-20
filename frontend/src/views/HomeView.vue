@@ -47,8 +47,14 @@
           </div>
           
           <!-- Loading State -->
-          <div v-if="wikisLoading" class="flex justify-center py-8">
+          <div v-if="wikisLoading" class="flex flex-col items-center py-8">
             <LoadingSpinner size="medium" message="Loading your wikis..." />
+            <button 
+              @click="forceRetryWikis"
+              class="mt-4 px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline"
+            >
+              Taking too long? Click to retry
+            </button>
           </div>
           
           <!-- Error State -->
@@ -200,24 +206,48 @@ const getUserId = (): string => {
     
     userId = `user_${Math.abs(hash).toString(16)}`
     localStorage.setItem('threatlens_user_id', userId)
+    console.log('🆔 Generated new user ID:', userId)
+  } else {
+    console.log('🆔 Using existing user ID:', userId)
   }
   return userId
 }
 
 const loadUserWikis = async () => {
+  console.log('🔄 loadUserWikis: Starting to load user wikis...')
+  
   try {
     wikisLoading.value = true
     wikisError.value = null
     
     const userId = getUserId()
+    console.log('🔄 loadUserWikis: User ID:', userId)
+    
+    console.log('🔄 loadUserWikis: Making API call...')
+    const startTime = Date.now()
+    
     const response = await api.getUserWikis(userId)
+    
+    const endTime = Date.now()
+    console.log(`🔄 loadUserWikis: API call completed in ${endTime - startTime}ms`)
+    console.log('🔄 loadUserWikis: Response:', response)
+    
     userWikis.value = response.wikis || []
+    console.log(`🔄 loadUserWikis: Set ${userWikis.value.length} wikis`)
     
   } catch (error) {
-    console.error('Error loading user wikis:', error)
+    console.error('❌ loadUserWikis: Error loading user wikis:', error)
+    console.error('❌ loadUserWikis: Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      type: typeof error,
+      error: error
+    })
     wikisError.value = error instanceof Error ? error.message : 'Failed to load wikis'
   } finally {
+    console.log('🔄 loadUserWikis: Setting loading to false')
     wikisLoading.value = false
+    console.log('🔄 loadUserWikis: Final state - loading:', wikisLoading.value, 'wikis:', userWikis.value.length, 'error:', wikisError.value)
   }
 }
 
@@ -287,8 +317,18 @@ const handleWikiRetry = async (wiki: UserWiki) => {
   }
 }
 
+const forceRetryWikis = () => {
+  console.log('🔄 Force retry wikis clicked')
+  wikisLoading.value = false
+  wikisError.value = null
+  setTimeout(() => {
+    loadUserWikis()
+  }, 100)
+}
+
 // Load user wikis on component mount
 onMounted(() => {
+  console.log('🔄 HomeView mounted, loading user wikis...')
   loadUserWikis()
 })
 </script>

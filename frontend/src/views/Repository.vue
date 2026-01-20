@@ -17,289 +17,361 @@
       </div>
     </div>
 
-    <!-- Main Content -->
-    <div v-else class="flex h-screen">
-      <!-- Wiki Navigation Sidebar -->
-      <div class="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
-        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
-          <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">
-            Security Wiki
-          </h1>
-          <AnalysisStatus
-            :repo-id="repoId"
-            @status-change="handleAnalysisStatusChange"
-            @complete="handleAnalysisComplete"
-            @error="handleAnalysisError"
-          />
-        </div>
-        
-        <div class="flex-1 overflow-y-auto">
-          <!-- Wiki Section Navigation -->
-          <nav class="p-4 space-y-2">
-            <div v-if="wiki && Object.keys(wiki.sections).length > 0">
-              <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
-                Wiki Sections
-              </h3>
-              <div class="space-y-1">
-                <button
-                  v-for="(section, sectionId) in wiki.sections"
-                  :key="sectionId"
-                  @click="handleSectionSelect(sectionId)"
-                  :class="cn(
-                    'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors',
-                    selectedSectionId === sectionId
-                      ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  )"
-                >
-                  <div class="flex items-center space-x-2">
-                    <component :is="getSectionIcon(sectionId)" class="w-4 h-4 flex-shrink-0" />
-                    <span class="truncate">{{ section.title }}</span>
-                  </div>
-                  <div v-if="section.security_findings?.length" class="text-xs text-red-500 dark:text-red-400 mt-1 ml-6">
-                    {{ section.security_findings.length }} finding(s)
-                  </div>
-                </button>
-              </div>
-
-              <!-- Cross-References -->
-              <div v-if="selectedSection?.cross_references?.length" class="mt-6">
-                <h4 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">
-                  Related Sections
-                </h4>
-                <div class="space-y-1">
-                  <button
-                    v-for="refId in selectedSection.cross_references"
-                    :key="refId"
-                    @click="handleSectionSelect(refId)"
-                    class="w-full text-left px-2 py-1 rounded text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                  >
-                    <ArrowRight class="w-3 h-3 inline mr-1" />
-                    {{ wiki?.sections[refId]?.title || refId }}
-                  </button>
-                </div>
-              </div>
+    <!-- Main Content with Resizable Layout -->
+    <div v-else class="h-screen">
+      <ResizableLayout 
+        :show-right="showChat"
+        :default-left-width="320"
+        :default-right-width="400"
+        :min-left-width="250"
+        :min-right-width="300"
+        :max-left-width="500"
+        :max-right-width="600"
+      >
+        <!-- Left Panel: Wiki Navigation -->
+        <template #left>
+          <div class="h-full bg-white dark:bg-gray-800 flex flex-col">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+              <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">
+                Security Wiki
+              </h1>
+              <AnalysisStatus
+                :repo-id="repoId"
+                @status-change="handleAnalysisStatusChange"
+                @complete="handleAnalysisComplete"
+                @error="handleAnalysisError"
+              />
             </div>
             
-            <div v-else-if="analysisStatus?.status === 'completed'" class="text-center py-8">
-              <BookOpen class="w-8 h-8 text-gray-400 mx-auto mb-2" />
-              <p class="text-sm text-gray-500 dark:text-gray-400">
-                No wiki sections found
-              </p>
-            </div>
-          </nav>
-        </div>
-      </div>
+            <div class="flex-1 overflow-y-auto">
+              <!-- Wiki Section Navigation -->
+              <nav class="p-4 space-y-2">
+                <div v-if="wiki && Object.keys(wiki.sections).length > 0">
+                  <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
+                    Wiki Sections
+                  </h3>
+                  <div class="space-y-1">
+                    <button
+                      v-for="(section, sectionId) in wiki.sections"
+                      :key="sectionId"
+                      @click="handleSectionSelect(sectionId)"
+                      :class="cn(
+                        'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors',
+                        selectedSectionId === sectionId
+                          ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      )"
+                    >
+                      <div class="flex items-center space-x-2">
+                        <component :is="getSectionIcon(sectionId)" class="w-4 h-4 flex-shrink-0" />
+                        <span class="truncate">{{ section.title }}</span>
+                      </div>
+                      <div v-if="section.security_findings?.length" class="text-xs text-red-500 dark:text-red-400 mt-1 ml-6">
+                        {{ (section.security_findings || []).length }} finding(s)
+                      </div>
+                    </button>
+                  </div>
 
-      <!-- Main Content Area -->
-      <div class="flex-1 flex flex-col">
-        <!-- Top Bar with Search -->
+                  <!-- Cross-References -->
+                  <div v-if="selectedSection?.cross_references?.length" class="mt-6">
+                    <h4 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">
+                      Related Sections
+                    </h4>
+                    <div class="space-y-1">
+                      <button
+                        v-for="refId in selectedSection.cross_references"
+                        :key="refId"
+                        @click="handleSectionSelect(refId)"
+                        class="w-full text-left px-2 py-1 rounded text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        <ArrowRight class="w-3 h-3 inline mr-1" />
+                        {{ wiki?.sections[refId]?.title || refId }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                <div v-else-if="analysisStatus?.status === 'completed'" class="text-center py-8">
+                  <BookOpen class="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    No wiki sections found
+                  </p>
+                </div>
+              </nav>
+            </div>
+          </div>
+        </template>
+
+        <!-- Main Content Area -->
+        <template #center>
+          <div class="h-full flex flex-col">
+        <!-- Top Bar with Search and Export -->
         <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
-          <div class="flex items-center space-x-4">
-            <div class="flex-1">
+          <div class="flex items-center justify-between">
+            <div class="flex-1 mr-4">
               <SearchBox
                 :repo-id="repoId"
                 :on-section-select="handleSectionSelect"
                 search-type="wiki"
               />
             </div>
+            
+            <!-- Export Actions -->
+            <div class="flex items-center space-x-2">
+              <!-- Chat Toggle -->
+              <button
+                v-if="wiki && Object.keys(wiki.sections).length > 0"
+                @click="toggleChat"
+                :class="cn(
+                  'inline-flex items-center px-4 py-2 border rounded-lg text-sm font-medium transition-colors',
+                  showChat
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600'
+                )"
+                title="Toggle security chat"
+              >
+                <MessageCircle class="w-4 h-4 mr-2" />
+                {{ showChat ? 'Hide Chat' : 'Security Chat' }}
+              </button>
+              
+              <button
+                v-if="wiki && Object.keys(wiki.sections).length > 0"
+                @click="exportWikiPDF"
+                :disabled="exportingPDF"
+                class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Export complete wiki as PDF"
+              >
+                <Download class="w-4 h-4 mr-2" />
+                <span v-if="exportingPDF">Generating PDF...</span>
+                <span v-else>Export PDF</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        <!-- Wiki Section Content -->
+        <!-- Content Area -->
         <div class="flex-1 overflow-y-auto">
-          <div v-if="analysisStatus?.status === 'analyzing' || analysisStatus?.status === 'queued'" class="flex items-center justify-center h-full">
-            <div class="text-center max-w-md">
-              <AnalysisStatus
-                :repo-id="repoId"
-                @status-change="handleAnalysisStatusChange"
-                @complete="handleAnalysisComplete"
-                @error="handleAnalysisError"
-                class="text-left"
-              />
-              <div class="mt-6">
-                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-                  Generating Security Wiki
-                </h3>
-                <p class="text-gray-600 dark:text-gray-400">
-                  This may take a few minutes depending on repository size and complexity.
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <div v-else-if="selectedSection" class="p-6">
-            <!-- Wiki Section Viewer -->
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
-              <!-- Section Header -->
-              <div class="p-6 border-b border-gray-200 dark:border-gray-700">
-                <div class="flex items-start justify-between">
-                  <div>
-                    <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-                      {{ selectedSection.title }}
-                    </h2>
-                    <div class="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
-                      <span v-if="selectedSection.security_findings?.length">
-                        {{ selectedSection.security_findings.length }} Security Finding(s)
-                      </span>
-                      <span v-if="selectedSection.owasp_mappings?.length">
-                        {{ selectedSection.owasp_mappings.length }} OWASP Reference(s)
-                      </span>
-                      <span v-if="selectedSection.code_references?.length">
-                        {{ selectedSection.code_references.length }} Code Reference(s)
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <!-- Section Actions -->
-                  <div class="flex items-center space-x-2">
-                    <button
-                      @click="copyToClipboard(selectedSection.content)"
-                      class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                      title="Copy content"
-                    >
-                      <Copy class="w-4 h-4" />
-                    </button>
-                    <button
-                      @click="exportSection(selectedSection)"
-                      class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                      title="Export section"
-                    >
-                      <Download class="w-4 h-4" />
-                    </button>
+          <!-- Wiki Section Content -->
+          <ErrorBoundary
+            error-title="Wiki Content Error"
+            fallback-title="Content Unavailable"
+            fallback-message="Unable to load wiki content. Please try selecting a different section or refresh the page."
+            :show-retry="true"
+            :show-fallback-ui="true"
+            :on-retry="loadWikiData"
+            :on-error="handleWikiError"
+          >
+              <div v-if="analysisStatus?.status === 'analyzing' || analysisStatus?.status === 'queued'" class="flex items-center justify-center h-full">
+                <div class="text-center max-w-md">
+                  <AnalysisStatus
+                    :repo-id="repoId"
+                    @status-change="handleAnalysisStatusChange"
+                    @complete="handleAnalysisComplete"
+                    @error="handleAnalysisError"
+                    class="text-left"
+                  />
+                  <div class="mt-6">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                      Generating Security Wiki
+                    </h3>
+                    <p class="text-gray-600 dark:text-gray-400">
+                      This may take a few minutes depending on repository size and complexity.
+                    </p>
                   </div>
                 </div>
               </div>
               
-              <!-- Section Content -->
-              <div class="p-6">
-                <div class="prose prose-gray dark:prose-invert max-w-none">
-                  <!-- Render markdown content with cross-reference links -->
-                  <div v-html="renderWikiContent(selectedSection.content)" class="wiki-content"></div>
-                </div>
-                
-                <!-- Security Findings -->
-                <div v-if="selectedSection.security_findings?.length" class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-                  <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
-                    <AlertTriangle class="w-5 h-5 mr-2 text-red-500" />
-                    Security Findings
-                  </h3>
-                  <div class="space-y-3">
-                    <div
-                      v-for="finding in selectedSection.security_findings"
-                      :key="finding.id"
-                      class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4"
-                    >
-                      <div class="flex items-start justify-between mb-2">
-                        <h4 class="font-medium text-red-900 dark:text-red-100">
-                          {{ finding.type }}
-                        </h4>
-                        <span
-                          :class="getSeverityClass(finding.severity)"
-                          class="px-2 py-1 rounded-full text-xs font-medium"
+              <div v-else-if="selectedSection" class="p-6">
+                <!-- Wiki Section Viewer -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+                  <!-- Section Header -->
+                  <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-start justify-between">
+                      <div>
+                        <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                          {{ selectedSection.title }}
+                        </h2>
+                        <div class="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
+                          <span v-if="selectedSection.security_findings?.length">
+                            {{ (selectedSection.security_findings || []).length }} Security Finding(s)
+                          </span>
+                          <span v-if="selectedSection.owasp_mappings?.length">
+                            {{ (selectedSection.owasp_mappings || []).length }} OWASP Reference(s)
+                          </span>
+                          <span v-if="selectedSection.code_references?.length">
+                            {{ (selectedSection.code_references || []).length }} Code Reference(s)
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <!-- Section Actions -->
+                      <div class="flex items-center space-x-2">
+                        <button
+                          @click="copyToClipboard(selectedSection.content)"
+                          class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                          title="Copy content"
                         >
-                          {{ finding.severity.toUpperCase() }}
-                        </span>
-                      </div>
-                      <p class="text-sm text-red-800 dark:text-red-200 mb-2">
-                        {{ finding.description }}
-                      </p>
-                      <div v-if="finding.recommendations?.length" class="text-xs text-red-700 dark:text-red-300">
-                        <strong>Recommendations:</strong>
-                        <ul class="list-disc list-inside mt-1">
-                          <li v-for="rec in finding.recommendations" :key="rec">{{ rec }}</li>
-                        </ul>
+                          <Copy class="w-4 h-4" />
+                        </button>
+                        <button
+                          @click="exportSection(selectedSection)"
+                          class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                          title="Export section"
+                        >
+                          <Download class="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                   </div>
-                </div>
-
-                <!-- OWASP Mappings -->
-                <div v-if="selectedSection.owasp_mappings?.length" class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-                  <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
-                    <Shield class="w-5 h-5 mr-2 text-green-500" />
-                    OWASP References
-                  </h3>
-                  <div class="flex flex-wrap gap-2">
-                    <a
-                      v-for="mapping in selectedSection.owasp_mappings"
-                      :key="mapping"
-                      :href="getOwaspUrl(mapping)"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200 hover:bg-green-200 dark:hover:bg-green-900/40 transition-colors"
-                    >
-                      <ExternalLink class="w-3 h-3 mr-1" />
-                      {{ mapping }}
-                    </a>
-                  </div>
-                </div>
-                
-                <!-- Code References -->
-                <div v-if="selectedSection.code_references?.length" class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-                  <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
-                    <Code class="w-5 h-5 mr-2" />
-                    Code References
-                  </h3>
-                  <div class="space-y-3">
-                    <div
-                      v-for="(ref, index) in selectedSection.code_references"
-                      :key="index"
-                      class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4"
-                    >
-                      <div class="flex items-center space-x-2 mb-2">
-                        <FileText class="w-4 h-4 text-gray-500" />
-                        <span class="font-mono text-sm text-gray-900 dark:text-gray-100">
-                          {{ ref.file_path }}
-                        </span>
-                        <span v-if="ref.line_number" class="text-xs text-gray-500 dark:text-gray-400">
-                          Line {{ ref.line_number }}
-                        </span>
-                      </div>
-                      <pre v-if="ref.code_snippet" class="text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded overflow-x-auto"><code>{{ ref.code_snippet }}</code></pre>
+                  
+                  <!-- Section Content -->
+                  <div class="p-6">
+                    <div class="prose prose-gray dark:prose-invert max-w-none">
+                      <!-- Render markdown content with cross-reference links -->
+                      <div v-html="renderWikiContent(selectedSection.content)" class="wiki-content"></div>
                     </div>
-                  </div>
-                </div>
+                    
+                    <!-- Security Findings -->
+                    <div v-if="selectedSection.security_findings?.length" class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                      <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
+                        <AlertTriangle class="w-5 h-5 mr-2 text-red-500" />
+                        Security Findings
+                      </h3>
+                      <div class="space-y-3">
+                        <div
+                          v-for="finding in selectedSection.security_findings"
+                          :key="finding.id"
+                          class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4"
+                        >
+                          <div class="flex items-start justify-between mb-2">
+                            <h4 class="font-medium text-red-900 dark:text-red-100">
+                              {{ finding.type || 'Unknown Issue' }}
+                            </h4>
+                            <span
+                              :class="getSeverityClass(finding.severity || 'unknown')"
+                              class="px-2 py-1 rounded-full text-xs font-medium"
+                            >
+                              {{ (finding.severity || 'UNKNOWN').toUpperCase() }}
+                            </span>
+                          </div>
+                          <p class="text-sm text-red-800 dark:text-red-200 mb-2">
+                            {{ finding.description || 'No description available' }}
+                          </p>
+                          <div v-if="finding.recommendations?.length" class="text-xs text-red-700 dark:text-red-300">
+                            <strong>Recommendations:</strong>
+                            <ul class="list-disc list-inside mt-1">
+                              <li v-for="rec in (finding.recommendations || [])" :key="rec">{{ rec }}</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
 
-                <!-- Subsections -->
-                <div v-if="selectedSection.subsections?.length" class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-                  <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                    Subsections
-                  </h3>
-                  <div class="space-y-4">
-                    <div
-                      v-for="subsection in selectedSection.subsections"
-                      :key="subsection.id"
-                      class="border border-gray-200 dark:border-gray-600 rounded-lg p-4"
-                    >
-                      <h4 class="font-medium text-gray-900 dark:text-gray-100 mb-2">
-                        {{ subsection.title }}
-                      </h4>
-                      <div class="prose prose-sm prose-gray dark:prose-invert">
-                        <div v-html="renderWikiContent(subsection.content)" class="wiki-content"></div>
+                    <!-- OWASP Mappings -->
+                    <div v-if="selectedSection.owasp_mappings?.length" class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                      <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
+                        <Shield class="w-5 h-5 mr-2 text-green-500" />
+                        OWASP References
+                      </h3>
+                      <div class="flex flex-wrap gap-2">
+                        <a
+                          v-for="mapping in (selectedSection.owasp_mappings || [])"
+                          :key="mapping"
+                          :href="getOwaspUrl(mapping)"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200 hover:bg-green-200 dark:hover:bg-green-900/40 transition-colors"
+                        >
+                          <ExternalLink class="w-3 h-3 mr-1" />
+                          {{ mapping }}
+                        </a>
+                      </div>
+                    </div>
+                    
+                    <!-- Code References -->
+                    <div v-if="selectedSection.code_references?.length" class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                      <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
+                        <Code class="w-5 h-5 mr-2" />
+                        Code References
+                      </h3>
+                      <div class="space-y-3">
+                        <div
+                          v-for="(ref, index) in (selectedSection.code_references || [])"
+                          :key="index"
+                          class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4"
+                        >
+                          <div class="flex items-center space-x-2 mb-2">
+                            <FileText class="w-4 h-4 text-gray-500" />
+                            <span class="font-mono text-sm text-gray-900 dark:text-gray-100">
+                              {{ ref.file_path || 'Unknown file' }}
+                            </span>
+                            <span v-if="ref.line_number" class="text-xs text-gray-500 dark:text-gray-400">
+                              Line {{ ref.line_number }}
+                            </span>
+                          </div>
+                          <pre v-if="ref.code_snippet" class="text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded overflow-x-auto"><code>{{ ref.code_snippet }}</code></pre>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Subsections -->
+                    <div v-if="selectedSection.subsections?.length" class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                      <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+                        Subsections
+                      </h3>
+                      <div class="space-y-4">
+                        <div
+                          v-for="subsection in (selectedSection.subsections || [])"
+                          :key="subsection.id"
+                          class="border border-gray-200 dark:border-gray-600 rounded-lg p-4"
+                        >
+                          <h4 class="font-medium text-gray-900 dark:text-gray-100 mb-2">
+                            {{ subsection.title || 'Untitled Subsection' }}
+                          </h4>
+                          <div class="prose prose-sm prose-gray dark:prose-invert">
+                            <div v-html="renderWikiContent(subsection.content || '')" class="wiki-content"></div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-          
-          <div v-else class="flex items-center justify-center h-full">
-            <div class="text-center">
-              <div class="text-gray-400 dark:text-gray-600 mb-4">
-                <BookOpen class="w-16 h-16 mx-auto" />
+              
+              <div v-else class="flex items-center justify-center h-full">
+                <div class="text-center">
+                  <div class="text-gray-400 dark:text-gray-600 mb-4">
+                    <BookOpen class="w-16 h-16 mx-auto" />
+                  </div>
+                  <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                    No Section Selected
+                  </h3>
+                  <p class="text-gray-600 dark:text-gray-400">
+                    Select a wiki section from the navigation to view its content
+                  </p>
+                </div>
               </div>
-              <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-                No Section Selected
-              </h3>
-              <p class="text-gray-600 dark:text-gray-400">
-                Select a wiki section from the navigation to view its content
-              </p>
-            </div>
-          </div>
+            </ErrorBoundary>
         </div>
-      </div>
+          </div>
+        </template>
+
+        <!-- Right Panel: Chat Interface -->
+        <template #right>
+          <ChatErrorBoundary
+            :repo-id="repoId"
+            :on-retry="initializeChatSystem"
+            :on-error="handleChatError"
+          >
+            <ChatInterface
+              :repo-id="repoId"
+              :repository-name="wiki?.title"
+              @close="showChat = false"
+              @section-select="handleSectionSelect"
+            />
+          </ChatErrorBoundary>
+        </template>
+      </ResizableLayout>
     </div>
   </div>
 </template>
@@ -323,15 +395,20 @@ import {
   Lock,
   Search,
   Settings,
-  BarChart3
+  BarChart3,
+  MessageCircle
 } from 'lucide-vue-next'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import type { AnalysisProgress, SecurityWiki, WikiSection } from '@/lib/types'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import ErrorDisplay from '@/components/ErrorDisplay.vue'
+import ErrorBoundary from '@/components/ErrorBoundary.vue'
 import AnalysisStatus from '@/components/AnalysisStatus.vue'
 import SearchBox from '@/components/SearchBox.vue'
+import ChatInterface from '@/components/ChatInterface.vue'
+import ChatErrorBoundary from '@/components/ChatErrorBoundary.vue'
+import ResizableLayout from '@/components/ResizableLayout.vue'
 import { useToast } from '@/composables/useToast'
 
 const route = useRoute()
@@ -343,6 +420,8 @@ const wiki = ref<SecurityWiki | null>(null)
 const selectedSectionId = ref<string | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+const exportingPDF = ref(false)
+const showChat = ref(false)
 const sectionCache = new Map<string, WikiSection>()
 
 const selectedSection = computed(() => {
@@ -470,8 +549,9 @@ const formatDate = (dateString: string) => {
   })
 }
 
-const getSeverityClass = (severity: string) => {
-  switch (severity?.toLowerCase()) {
+const getSeverityClass = (severity: string | null | undefined) => {
+  const normalizedSeverity = severity?.toLowerCase() || 'unknown'
+  switch (normalizedSeverity) {
     case 'high':
     case 'critical':
       return 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-200'
@@ -533,6 +613,69 @@ const exportSection = (section: WikiSection) => {
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
   showSuccess('Section exported', `${section.title} has been downloaded`)
+}
+
+const exportWikiPDF = async () => {
+  if (!wiki.value) return
+  
+  try {
+    exportingPDF.value = true
+    
+    // Call API to generate PDF
+    const pdfBlob = await api.exportWikiPDF(repoId)
+    
+    // Create download link
+    const url = URL.createObjectURL(pdfBlob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${wiki.value.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_security_report.pdf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    
+    showSuccess('PDF exported', 'Complete security wiki has been downloaded as PDF')
+  } catch (err) {
+    console.error('PDF export failed:', err)
+    showError('Export failed', 'Failed to generate PDF. Please try again.')
+  } finally {
+    exportingPDF.value = false
+  }
+}
+
+const toggleChat = () => {
+  console.log('🔵 STEP 1: Repository.vue - Security Chat button clicked')
+  console.log('🔵 STEP 1: repoId =', repoId)
+  console.log('🔵 STEP 1: Current showChat =', showChat.value)
+  showChat.value = !showChat.value
+  console.log('🔵 STEP 1: New showChat =', showChat.value)
+}
+
+const initializeChatSystem = async () => {
+  console.log('Initializing chat system for repository:', repoId)
+  try {
+    // Ensure we have wiki data loaded
+    if (!wiki.value && analysisStatus.value?.status === 'completed') {
+      await loadWiki()
+    }
+    
+    // Show success message
+    showSuccess('Chat system initialized', 'Security chat is now available')
+  } catch (err) {
+    console.error('Failed to initialize chat system:', err)
+    showError('Chat initialization failed', 'Unable to start the security chat system')
+    throw err
+  }
+}
+
+const handleChatError = (error: Error) => {
+  console.error('Chat system error in Repository.vue:', error)
+  showError('Chat system error', 'The security chat encountered an error. Please try again.')
+}
+
+const handleWikiError = (error: Error) => {
+  console.error('Wiki content error in Repository.vue:', error)
+  showError('Wiki content error', 'Unable to load wiki content. Please try again.')
 }
 
 onMounted(() => {

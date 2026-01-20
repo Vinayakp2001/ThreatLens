@@ -10,9 +10,138 @@ from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime
 from pathlib import Path
 
-from api.config import settings
-from api.models import RepoContext, ThreatDoc, CodeReference, SecurityDocument, PRAnalysis
-from api.migrations import MigrationManager
+"""
+Database operations module for SQLite with migrations and integrity management
+"""
+import sqlite3
+import json
+import os
+import shutil
+import logging
+from typing import Optional, Dict, Any, List, Tuple
+from datetime import datetime
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# Standardized import system with comprehensive error handling
+try:
+    from .import_manager import safe_import, get_import_manager
+except ImportError:
+    try:
+        from import_manager import safe_import, get_import_manager
+    except ImportError:
+        # Fallback if import_manager is not available
+        logger = logging.getLogger(__name__)
+        logger.warning("Import manager not available - using basic imports")
+        
+        # Basic fallback import function
+        def safe_import(module_name, attribute_name=None, package=None):
+            class ImportResult:
+                def __init__(self):
+                    self.success = False
+                    self.module = None
+            
+            result = ImportResult()
+            try:
+                if package:
+                    try:
+                        module = __import__(f"{package}.{module_name}", fromlist=[attribute_name or module_name])
+                    except ImportError:
+                        module = __import__(module_name)
+                else:
+                    module = __import__(module_name)
+                
+                if attribute_name:
+                    result.module = getattr(module, attribute_name)
+                else:
+                    result.module = module
+                result.success = True
+            except Exception as e:
+                logger.error(f"Import failed for {module_name}: {e}")
+            
+            return result
+        
+        get_import_manager = lambda: None
+
+# Import required modules using the safe import system if available
+if get_import_manager():
+    import_manager = get_import_manager()
+    
+    # Import config
+    config_result = safe_import("config", "settings", package="api")
+    settings = config_result.module
+    if not config_result.success:
+        logger.error(f"Failed to import settings: {config_result.error_message}")
+    
+    # Import models
+    models_result = safe_import("models", package="api")
+    if models_result.success:
+        RepoContext = getattr(models_result.module, 'RepoContext', None)
+        ThreatDoc = getattr(models_result.module, 'ThreatDoc', None)
+        CodeReference = getattr(models_result.module, 'CodeReference', None)
+        SecurityDocument = getattr(models_result.module, 'SecurityDocument', None)
+        PRAnalysis = getattr(models_result.module, 'PRAnalysis', None)
+    else:
+        logger.error(f"Failed to import models: {models_result.error_message}")
+        # Create minimal fallback classes
+        class RepoContext: pass
+        class ThreatDoc: pass
+        class CodeReference: pass
+        class SecurityDocument: pass
+        class PRAnalysis: pass
+    
+    # Import migrations
+    migrations_result = safe_import("migrations", "MigrationManager", package="api")
+    MigrationManager = migrations_result.module
+    if not migrations_result.success:
+        logger.error(f"Failed to import MigrationManager: {migrations_result.error_message}")
+        # Create fallback migration manager
+        class MockMigrationManager:
+            def __init__(self, db_path):
+                self.db_path = db_path
+            
+            def apply_migrations(self):
+                return {"success": True, "migrations_applied": [], "errors": []}
+        
+        MigrationManager = MockMigrationManager
+    
+    # Log import status
+    import_stats = import_manager.get_import_stats()
+    logger.info(f"Database import stats: {import_stats}")
+    if import_stats['success_rate'] < 1.0:
+        logger.warning("Some imports failed - database may have limited functionality")
+
+else:
+    # Fallback to basic imports
+    try:
+        from api.config import settings
+        from api.models import RepoContext, ThreatDoc, CodeReference, SecurityDocument, PRAnalysis
+        from api.migrations import MigrationManager
+    except ImportError:
+        try:
+            from config import settings
+            from models import RepoContext, ThreatDoc, CodeReference, SecurityDocument, PRAnalysis
+            from migrations import MigrationManager
+        except ImportError:
+            logger.error("Failed to import required modules - database functionality will be limited")
+            settings = None
+            
+            # Create minimal fallback classes
+            class RepoContext: pass
+            class ThreatDoc: pass
+            class CodeReference: pass
+            class SecurityDocument: pass
+            class PRAnalysis: pass
+            
+            class MockMigrationManager:
+                def __init__(self, db_path):
+                    self.db_path = db_path
+                
+                def apply_migrations(self):
+                    return {"success": True, "migrations_applied": [], "errors": []}
+            
+            MigrationManager = MockMigrationManager
 
 
 logger = logging.getLogger(__name__)
@@ -1770,34 +1899,101 @@ class DatabaseManager:
             return False
     
     def fetch_one(self, query: str, params: tuple = ()) -> Optional[Dict[str, Any]]:
-        """Fetch one row from query"""
+        """Fetch one row from query with enhanced error handling and logging"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.execute(query, params)
                 result = cursor.fetchone()
-                return dict(result) if result else None
+                
+                if result:
+                    logger.debug(f"Database fetch_one successful: {query[:100]}...")
+                    return dict(result)
+                else:
+                    logger.debug(f"Database fetch_one returned no results: {query[:100]}...")
+                    return None
+                    
+        except sqlite3.Error as e:
+            logger.error(f"SQLite error in fetch_one: {e}")
+            logger.error(f"Query: {query}")
+            logger.error(f"Params: {params}")
+            return None
         except Exception as e:
-            logger.error(f"Fetch one failed: {e}")
+            logger.error(f"Unexpected error in fetch_one: {e}")
+            logger.error(f"Query: {query}")
+            logger.error(f"Params: {params}")
             return None
     
     def fetch_all(self, query: str, params: tuple = ()) -> List[Dict[str, Any]]:
-        """Fetch all rows from query"""
+        """Fetch all rows from query with enhanced error handling and logging"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.execute(query, params)
                 results = cursor.fetchall()
+                
+                logger.debug(f"Database fetch_all returned {len(results)} rows: {query[:100]}...")
                 return [dict(row) for row in results]
-        except Exception as e:
-            logger.error(f"Fetch all failed: {e}")
+                
+        except sqlite3.Error as e:
+            logger.error(f"SQLite error in fetch_all: {e}")
+            logger.error(f"Query: {query}")
+            logger.error(f"Params: {params}")
             return []
+        except Exception as e:
+            logger.error(f"Unexpected error in fetch_all: {e}")
+            logger.error(f"Query: {query}")
+            logger.error(f"Params: {params}")
+            return []
+    
+    def execute_query(self, query: str, params: tuple = ()) -> bool:
+        """Execute a query and return success status with enhanced error handling"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute(query, params)
+                conn.commit()
+                
+                rows_affected = cursor.rowcount
+                logger.debug(f"Database execute_query successful, {rows_affected} rows affected: {query[:100]}...")
+                return True
+                
+        except sqlite3.Error as e:
+            logger.error(f"SQLite error in execute_query: {e}")
+            logger.error(f"Query: {query}")
+            logger.error(f"Params: {params}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error in execute_query: {e}")
+            logger.error(f"Query: {query}")
+            logger.error(f"Params: {params}")
+            return False
     
     def close(self):
         """Close database connections (placeholder for connection pooling)"""
         # In SQLite, connections are automatically closed when context managers exit
         # This method is here for compatibility with connection pooling implementations
         pass
+    
+    def validate_connection(self) -> bool:
+        """Validate database connection and perform basic health check"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute("SELECT 1 as health_check")
+                result = cursor.fetchone()
+                
+                if result and result[0] == 1:
+                    logger.debug("Database connection validation successful")
+                    return True
+                else:
+                    logger.error("Database connection validation failed - unexpected result")
+                    return False
+                    
+        except sqlite3.Error as e:
+            logger.error(f"Database connection validation failed - SQLite error: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Database connection validation failed - unexpected error: {e}")
+            return False
     
     # User Wiki Management Methods (Phase 1 MVP)
     

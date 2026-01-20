@@ -16,12 +16,78 @@ import faiss
 from sentence_transformers import SentenceTransformer
 import openai
 
-from .config import settings
-from .models import (
-    ThreatDoc, CodeReference, SearchResult, Embedding,
-    RepoContext, SecurityFinding, OWASPMapping, OWASPGuidance
-)
-from .resource_manager import get_resource_manager, ResourceManager
+logger = logging.getLogger(__name__)
+
+# Standardized import system with comprehensive error handling
+try:
+    from .import_manager import safe_import, get_import_manager
+except ImportError:
+    from import_manager import safe_import, get_import_manager
+
+# Import required modules using the safe import system
+import_manager = get_import_manager()
+
+# Import config
+config_result = safe_import("config", "settings", package="api")
+settings = config_result.module
+if not config_result.success:
+    logger.error(f"Failed to import settings: {config_result.error_message}")
+
+# Import models
+models_result = safe_import("models", package="api")
+if models_result.success:
+    ThreatDoc = getattr(models_result.module, 'ThreatDoc', None)
+    CodeReference = getattr(models_result.module, 'CodeReference', None)
+    SearchResult = getattr(models_result.module, 'SearchResult', None)
+    Embedding = getattr(models_result.module, 'Embedding', None)
+    RepoContext = getattr(models_result.module, 'RepoContext', None)
+    SecurityFinding = getattr(models_result.module, 'SecurityFinding', None)
+    OWASPMapping = getattr(models_result.module, 'OWASPMapping', None)
+    OWASPGuidance = getattr(models_result.module, 'OWASPGuidance', None)
+else:
+    logger.error(f"Failed to import models: {models_result.error_message}")
+    # Create minimal fallback classes
+    class ThreatDoc: pass
+    class CodeReference: pass
+    class SearchResult: pass
+    class Embedding: pass
+    class RepoContext: pass
+    class SecurityFinding: pass
+    class OWASPMapping: pass
+    class OWASPGuidance: pass
+
+# Import resource manager
+resource_manager_result = safe_import("resource_manager", package="api")
+if resource_manager_result.success:
+    get_resource_manager = getattr(resource_manager_result.module, 'get_resource_manager', None)
+    ResourceManager = getattr(resource_manager_result.module, 'ResourceManager', None)
+else:
+    logger.error(f"Failed to import resource_manager: {resource_manager_result.error_message}")
+    # Create fallback resource manager
+    class MockResourceManager:
+        def get_embedding_config(self):
+            return {"device": "cpu", "batch_size": 32}
+        
+        def get_optimal_batch_size(self, operation: str, total_items: int):
+            return min(32, total_items)
+        
+        def should_use_gpu_for_operation(self, operation: str, items: int):
+            return False
+        
+        def monitor_resource_usage(self):
+            return {"cpu_percent": 0, "memory_percent": 0, "gpu_memory_percent": 0}
+        
+        def get_faiss_config(self):
+            return {"use_gpu": False, "gpu_device": None}
+    
+    get_resource_manager = lambda: MockResourceManager()
+    ResourceManager = MockResourceManager
+
+# Log import status
+import_stats = import_manager.get_import_stats()
+logger.info(f"RAG system import stats: {import_stats}")
+if import_stats['success_rate'] < 1.0:
+    logger.warning("Some imports failed - RAG system may have limited functionality")
 
 logger = logging.getLogger(__name__)
 
@@ -873,6 +939,73 @@ class RAGSystem:
         
         logger.info(f"Successfully embedded {len(embeddings)} code snippets for repo {repo_context.repo_id}")
     
+    
+    def search_database_embeddings(self, query: str, repo_id: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        """
+        Search embeddings directly from database (fallback when FAISS indices not available)
+        """
+        try:
+            # Load embedding model
+            model = SentenceTransformer('all-MiniLM-L6-v2')
+            
+            # Generate query embedding
+            query_embedding = model.encode(query)
+            
+            # Connect to database
+            db_path = "./storage/threat_modeling.db"
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Get all embeddings for this repo
+            cursor.execute("""
+                SELECT id, content_text, embedding_vector, metadata, chunk_index
+                FROM embeddings 
+                WHERE repo_id = ? AND content_type = 'security_wiki'
+                ORDER BY chunk_index
+            """, (repo_id,))
+            
+            embeddings_data = cursor.fetchall()
+            conn.close()
+            
+            if not embeddings_data:
+                return []
+            
+            # Calculate similarities
+            results = []
+            for emb_id, content_text, embedding_json, metadata_json, chunk_index in embeddings_data:
+                try:
+                    # Parse embedding vector
+                    embedding_vector = np.array(json.loads(embedding_json))
+                    
+                    # Calculate cosine similarity
+                    similarity = np.dot(query_embedding, embedding_vector) / (
+                        np.linalg.norm(query_embedding) * np.linalg.norm(embedding_vector)
+                    )
+                    
+                    # Parse metadata
+                    metadata = json.loads(metadata_json) if metadata_json else {}
+                    
+                    results.append({
+                        'id': emb_id,
+                        'content': content_text,
+                        'relevance_score': float(similarity),
+                        'metadata': metadata,
+                        'content_type': 'document',
+                        'content_id': emb_id,
+                        'chunk_index': chunk_index
+                    })
+                    
+                except Exception as e:
+                    continue
+            
+            # Sort by similarity and return top results
+            results.sort(key=lambda x: x['relevance_score'], reverse=True)
+            return results[:top_k]
+            
+        except Exception as e:
+            logger.error(f"Database embedding search failed: {e}")
+            return []
+
     def search_similar_content(self, query: str, repo_id: str, top_k: int = 5, 
                              content_types: Optional[List[str]] = None) -> List[SearchResult]:
         """
@@ -890,7 +1023,24 @@ class RAGSystem:
         # Load index if not in memory
         if repo_id not in self.index_manager.indices:
             if not self.index_manager.load_index(repo_id):
-                logger.warning(f"No index found for repo {repo_id}")
+                logger.warning(f"No FAISS index found for repo {repo_id}, trying database search")
+                # Fallback to database search
+                db_results = self.search_database_embeddings(query, repo_id, top_k)
+                if db_results:
+                    # Convert database results to SearchResult objects
+                    search_results = []
+                    for result in db_results:
+                        # Use the SearchResult class that was imported at module level
+                        search_result = SearchResult(
+                            doc_id=result['id'],
+                            title=result['metadata'].get('title', 'Security Wiki Content'),
+                            content_snippet=result['content'][:200] + '...' if len(result['content']) > 200 else result['content'],
+                            relevance_score=result['relevance_score'],
+                            doc_type='security_wiki',
+                            code_references=[]
+                        )
+                        search_results.append(search_result)
+                    return search_results
                 return []
         
         # Generate query embedding

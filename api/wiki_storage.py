@@ -256,7 +256,7 @@ class WikiStorage:
             }
             
             # Use existing database manager with new table
-            return self.db_manager.execute_query(
+            success = self.db_manager.execute_query(
                 """
                 INSERT OR REPLACE INTO security_wikis 
                 (id, repo_id, title, sections, cross_references, search_index, metadata, created_at, updated_at)
@@ -264,6 +264,13 @@ class WikiStorage:
                 """,
                 tuple(wiki_data.values())
             )
+            
+            if success:
+                logger.info(f"Successfully saved wiki {wiki.id} to database")
+            else:
+                logger.error(f"Failed to save wiki {wiki.id} to database")
+            
+            return success
             
         except Exception as e:
             logger.error(f"Error saving wiki to database: {e}")
@@ -470,14 +477,22 @@ class WikiStorage:
             return False
     
     def _delete_wiki_from_database(self, wiki_id: str) -> bool:
-        """Delete wiki from database"""
+        """Delete wiki from database with proper error handling"""
         try:
-            return self.db_manager.execute_query(
+            success = self.db_manager.execute_query(
                 "DELETE FROM security_wikis WHERE id = ?",
                 (wiki_id,)
             )
+            
+            if success:
+                logger.info(f"Successfully deleted wiki {wiki_id} from database")
+            else:
+                logger.error(f"Failed to delete wiki {wiki_id} from database")
+            
+            return success
+            
         except Exception as e:
-            logger.error(f"Error deleting wiki from database: {e}")
+            logger.error(f"Error deleting wiki {wiki_id} from database: {e}")
             return False
     
     def _delete_wiki_from_file(self, wiki_id: str) -> bool:

@@ -14,6 +14,8 @@ import httpx
 import openai
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+logger = logging.getLogger(__name__)
+
 # Google Gemini support
 try:
     import google.generativeai as genai
@@ -36,8 +38,38 @@ try:
 except ImportError:
     HUGGINGFACE_AVAILABLE = False
 
-from .config import settings
-from .cost_tracker import cost_tracker
+# Standardized import system with comprehensive error handling
+try:
+    from .import_manager import safe_import, get_import_manager
+except ImportError:
+    from import_manager import safe_import, get_import_manager
+
+# Import required modules using the safe import system
+import_manager = get_import_manager()
+
+# Import config
+config_result = safe_import("config", "settings", package="api")
+settings = config_result.module
+if not config_result.success:
+    logger.error(f"Failed to import settings: {config_result.error_message}")
+
+# Import cost tracker
+cost_tracker_result = safe_import("cost_tracker", "cost_tracker", package="api")
+cost_tracker = cost_tracker_result.module
+if not cost_tracker_result.success:
+    logger.error(f"Failed to import cost_tracker: {cost_tracker_result.error_message}")
+    # Create mock cost tracker
+    class MockCostTracker:
+        def record_request(self, **kwargs):
+            logger.debug(f"Mock cost tracker: record_request called with {kwargs}")
+    
+    cost_tracker = MockCostTracker()
+
+# Log import status
+import_stats = import_manager.get_import_stats()
+logger.info(f"LLM client import stats: {import_stats}")
+if import_stats['success_rate'] < 1.0:
+    logger.warning("Some imports failed - LLM client may have limited functionality")
 
 logger = logging.getLogger(__name__)
 

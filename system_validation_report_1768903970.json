@@ -1,0 +1,34 @@
+{
+  "timestamp": "2026-01-20T15:42:50.377861",
+  "summary": {
+    "total_tests": 7,
+    "passed_tests": 0,
+    "failed_tests": 7,
+    "success_rate": "0.0%",
+    "overall_success": false
+  },
+  "test_results": {
+    "chat_initialization": false,
+    "repository_context": false,
+    "owasp_questions": false,
+    "frontend_compatibility": false,
+    "error_handling": false,
+    "diagnostics": false,
+    "overall_success": false
+  },
+  "error_log": [
+    {
+      "test": "database_setup",
+      "error": "Database setup failed: 'NoneType' object has no attribute 'fetch_all'",
+      "timestamp": "2026-01-20T15:42:50.377861"
+    }
+  ],
+  "recommendations": [
+    "Fix chat system initialization - check import paths and database connections",
+    "Fix repository context loading - verify database queries and data structure",
+    "Improve RAG system integration - check embeddings and search functionality",
+    "Fix frontend API compatibility - verify response data structures",
+    "Enhance error handling - add more graceful degradation",
+    "Improve error diagnostics - add more detailed logging"
+  ]
+}

@@ -307,4 +307,27 @@ desktop.ini
 package-lock.json
 yarn.lock
 Pipfile.lock
-poetry.lock
+poetry.lock# Tes
+t and Debug Files (cleanup patterns)
+test_*.py
+debug_*.py
+fix_*.py
+check_*.py
+force_*.py
+deep_*.py
+restart_*.py
+restore_*.py
+find_*.py
+diagnose_*.py
+final_*.py
+quick_*.py
+cleanup_*.py
+start_server.py
+run_server.py
+update_*.py
+install_*.py
+generate_*.py
+
+# Temporary Implementation Files
+*_SUMMARY.md
+*_IMPLEMENTATION.md
